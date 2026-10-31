@@ -1,0 +1,75 @@
+.top-bar {
+  background-color: var(--bg);
+  padding: 1rem 2rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: var(--text);
+}
+
+.top-bar__title {
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: var(--text);
+}
+
+.top-bar__nav {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.top-bar__button {
+  background-color: var(--accent-dark);
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  color: var(--text);
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+.top-bar__button:hover {
+  background-color: var(--accent);
+}
+
+.top-bar__user {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.top-bar__dropdown {
+  position: absolute;
+  top: 50px;
+  right: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  background-color: var(--bg-card);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  padding: 1rem;
+  z-index: 1000;
+}
+
+.top-bar__avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background-color: var(--bg-card);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  color: var(--text);
+}
+
+.top-bar__name {
+  font-size: 1rem;
+  color: var(--text);
+}
+
+.top-bar--dark {
+  background-color: var(--bg-section);
+}

@@ -1,0 +1,74 @@
+.top-bar {
+    background-color: var(--bg);
+    padding: 1rem 2rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    color: var(--text);
+
+    &__title {
+        font-size: 1.5rem;
+        font-weight: bold;
+        color: var(--text);
+    }
+
+    &__nav {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+    }
+
+    &__button {
+        background-color: var(--accent-dark);
+        border: none;
+        padding: 0.5rem 1rem;
+        border-radius: 8px;
+        color: var(--text);
+        cursor: pointer;
+        transition: background-color 0.3s;
+
+        &:hover {
+        background-color: var(--accent);
+        }
+    }
+
+    &__user {
+        position: relative;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+    &__dropdown {
+        position: absolute;
+        top: 50px;
+        right: 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 0.7rem;
+        background-color: var(--bg-card);
+        border-radius: 8px;
+        box-shadow: var(--shadow);
+        padding: 1rem;
+        z-index: 1000;
+    }
+    &__avatar {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background-color: var(--bg-card);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        color: var(--text);
+    }
+
+    &__name {
+        font-size: 1rem;
+        color: var(--text);
+    }
+    
+
+    &--dark {
+        background-color: var(--bg-section);
+    }
+}
