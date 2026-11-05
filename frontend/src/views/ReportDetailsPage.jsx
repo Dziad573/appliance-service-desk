@@ -131,6 +131,105 @@ export const ReportDetailsPage = () => {
         navigate(isAdmin ? '/reports' : '/user-reports');
     };
 
+    // Pobieranie komentarzy dla aktualnie otwartej reklamacji
+    useEffect(() => {
+        if (!report?.id) return;
+
+        let cancelled = false;
+
+        const fetchComments = async () => {
+            try {
+                setCommentsLoading(true);
+                setCommentsError('');
+
+                const data = await getComments(report.id);
+
+                if (!cancelled) {
+                    setComments(Array.isArray(data) ? data : []);
+                }
+            } catch (err) {
+                if (!cancelled) {
+                    setCommentsError(
+                        err.response?.data?.error ||
+                        'Nie udało się pobrać komentarzy.'
+                    );
+                }
+            } finally {
+                if (!cancelled) {
+                    setCommentsLoading(false);
+                }
+            }
+        };
+
+        fetchComments();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [report?.id]);
+
+    // Przewijanie listy do najnowszego komentarza
+    useEffect(() => {
+        if (commentsListRef.current) {
+            commentsListRef.current.scrollTop =
+                commentsListRef.current.scrollHeight;
+        }
+    }, [comments]);
+
+    // Wysyłanie komentarza lub odpowiedzi
+    const submitComment = async (event) => {
+        event.preventDefault();
+
+        const content = commentText.trim();
+
+        if (!content || !user?.id || !report?.id || sendingComment) {
+            return;
+        }
+
+        try {
+            setSendingComment(true);
+            setCommentsError('');
+
+            const createdComment = await addComment(report.id, {
+                user_id: user.id,
+                content,
+                parent_comment_id: replyTo?.id ?? null
+            });
+
+            setComments((current) => [...current, createdComment]);
+
+            setCommentText('');
+            setReplyTo(null);
+
+        } catch (err) {
+            setCommentsError(
+                err.response?.data?.error ||
+                'Nie udało się wysłać komentarza.'
+            );
+        } finally {
+            setSendingComment(false);
+        }
+    };
+
+    // Przewijanie do komentarza, na który udzielono odpowiedzi
+    const jumpToComment = (commentId) => {
+        const element = commentRefs.current[commentId];
+
+        if (!element) return;
+
+        element.scrollIntoView({
+            behavior: 'smooth',
+            block: 'center'
+        });
+
+        element.classList.add('comment-item--highlight');
+
+        window.setTimeout(() => {
+            element.classList.remove('comment-item--highlight');
+        }, 1800);
+    };
+
+
     return (
         <div className="report-details-page">
 
