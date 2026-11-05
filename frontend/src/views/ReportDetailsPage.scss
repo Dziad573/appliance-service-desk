@@ -1,0 +1,291 @@
+
+.report-details-page {
+    min-height: 100vh;
+    background: #121214;
+    color: #e1e1e6;
+    padding: 30px 20px 60px;
+    box-sizing: border-box;
+}
+
+.report-details-container {
+    max-width: 1400px;
+    margin: 0 auto;
+}
+
+// Przycisk powrotu
+.report-back-button {
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    padding: 10px 15px;
+    margin-bottom: 25px;
+    background: #202024;
+    border: 1px solid #323238;
+    border-radius: 7px;
+    color: #c4c4cc;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: 0.2s;
+
+    &:hover {
+        border-color: #00b37e;
+        color: #00b37e;
+    }
+}
+
+// Nagłówek reklamacji
+.report-details-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 20px;
+    padding: 30px;
+    background: #202024;
+    border: 1px solid #323238;
+    border-radius: 10px;
+    margin-bottom: 22px;
+
+    &__main {
+        min-width: 0;
+
+        h1 {
+            font-size: 1.9rem;
+            color: #f1f1f5;
+            margin: 8px 0;
+            overflow-wrap: anywhere;
+        }
+
+        p {
+            color: #8d8d99;
+            margin: 0;
+            font-size: 0.9rem;
+        }
+    }
+}
+
+.report-details-eyebrow {
+    color: #00b37e;
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 1px;
+}
+
+// Status
+.report-details-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 9px 15px;
+    border-radius: 30px;
+    font-size: 0.85rem;
+    font-weight: 700;
+    white-space: nowrap;
+
+    &--success {
+        background: rgba(0, 179, 126, 0.15);
+        color: #00b37e;
+    }
+
+    &--warning {
+        background: rgba(219, 145, 6, 0.15);
+        color: #fba919;
+    }
+
+    &--new {
+        background: rgba(59, 130, 246, 0.15);
+        color: #3b82f6;
+    }
+}
+
+// Układ główny
+.report-details-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 320px;
+    align-items: start;
+    gap: 22px;
+}
+
+.report-details-main,
+.report-details-sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+}
+
+// Karty
+.details-card {
+    background: #202024;
+    border: 1px solid #323238;
+    border-radius: 9px;
+    padding: 25px;
+
+    &__header {
+        display: flex;
+        align-items: center;
+        gap: 13px;
+        padding-bottom: 20px;
+        margin-bottom: 20px;
+        border-bottom: 1px solid #323238;
+
+        h2 {
+            font-size: 1.05rem;
+            color: #f1f1f5;
+            margin: 0 0 5px;
+        }
+
+        p {
+            font-size: 0.8rem;
+            color: #8d8d99;
+            margin: 0;
+        }
+    }
+
+    &__icon {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 40px;
+        height: 40px;
+        flex-shrink: 0;
+        border-radius: 8px;
+        background: rgba(0, 179, 126, 0.12);
+        color: #00b37e;
+    }
+}
+
+// Pola danych
+.details-fields {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 25px 35px;
+}
+
+.details-field {
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+    min-width: 0;
+
+    span {
+        color: #8d8d99;
+        font-size: 0.8rem;
+    }
+
+    strong {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: #e1e1e6;
+        font-size: 0.95rem;
+        overflow-wrap: anywhere;
+
+        svg {
+            flex-shrink: 0;
+            color: #00b37e;
+        }
+    }
+}
+
+// Opis usterki
+.report-description {
+    padding: 18px;
+    background: #17171a;
+    border: 1px solid #323238;
+    border-radius: 7px;
+    color: #d4d4dc;
+    font-size: 0.95rem;
+    line-height: 1.7;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    min-height: 70px;
+}
+
+// Panel boczny
+.sidebar-field {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    padding: 13px 0;
+    border-bottom: 1px solid #323238;
+
+    &:last-child {
+        border-bottom: none;
+        padding-bottom: 0;
+    }
+
+    &:first-of-type {
+        padding-top: 0;
+    }
+
+    span {
+        font-size: 0.78rem;
+        color: #8d8d99;
+    }
+
+    strong {
+        color: #e1e1e6;
+        font-size: 0.9rem;
+        overflow-wrap: anywhere;
+    }
+}
+
+// Komunikaty
+.report-details-message {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 12px;
+    min-height: 250px;
+    padding: 30px;
+    background: #202024;
+    border: 1px solid #323238;
+    border-radius: 9px;
+    color: #8d8d99;
+    text-align: center;
+
+    &--error {
+        color: #f87171;
+    }
+
+    p {
+        margin: 0;
+    }
+}
+
+// Responsywność
+@media (max-width: 900px) {
+    .report-details-layout {
+        grid-template-columns: 1fr;
+    }
+
+    .report-details-sidebar {
+        display: grid;
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 600px) {
+    .report-details-page {
+        padding: 20px 12px 40px;
+    }
+
+    .report-details-header {
+        align-items: flex-start;
+        flex-direction: column;
+        padding: 22px;
+
+        &__main h1 {
+            font-size: 1.5rem;
+        }
+    }
+
+    .details-card {
+        padding: 18px;
+    }
+
+    .details-fields {
+        grid-template-columns: 1fr;
+        gap: 20px;
+    }
+}

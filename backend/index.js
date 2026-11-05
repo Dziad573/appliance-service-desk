@@ -39,6 +39,30 @@ app.get('/', (req, res) => {
     res.send('USWB działa');
 });
 
+// Pobieranie pojedynczej reklamacji
+app.get('/report/:reportId', async (req, res) => {
+    try {
+        const { reportId } = req.params;
+
+        const report = await Report.findByPk(reportId);
+
+        if (!report) {
+            return res.status(404).json({
+                message: 'Nie znaleziono reklamacji'
+            });
+        }
+
+        res.json(report);
+
+    } catch (err) {
+        console.error('Błąd pobierania reklamacji:', err);
+
+        res.status(500).json({
+            message: 'Błąd serwera'
+        });
+    }
+});
+
 app.get('/reports', async (req, res) => {
     try {
         const reports = await Report.findAll();
@@ -59,6 +83,36 @@ app.get('/reports/:userId', async (req, res) => {
     } catch (err) {
         console.error('Błąd pobierania zgłoszeń:', err);
         res.status(500).json({ message: 'Błąd serwera' });
+    }
+});
+
+// Pobieranie pojedynczej reklamacji po ID
+app.get('/reports/detail/:reportId', async (req, res) => {
+    try {
+        const reportId = Number(req.params.reportId);
+
+        if (!Number.isInteger(reportId) || reportId <= 0) {
+            return res.status(400).json({
+                message: 'Nieprawidłowy numer reklamacji'
+            });
+        }
+
+        const report = await Report.findByPk(reportId);
+
+        if (!report) {
+            return res.status(404).json({
+                message: `Reklamacja o ID ${reportId} nie istnieje w bazie danych`
+            });
+        }
+
+        return res.status(200).json(report);
+
+    } catch (err) {
+        console.error('Błąd pobierania pojedynczej reklamacji:', err);
+
+        return res.status(500).json({
+            message: 'Błąd serwera podczas pobierania reklamacji'
+        });
     }
 });
 

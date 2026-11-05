@@ -139,6 +139,18 @@
         & > * {
             min-width: 0;
         }
+        &--clickable {
+        cursor: pointer;
+
+        &:hover {
+            background: #303039;
+        }
+
+        &:focus-visible {
+            outline: 2px solid #00b37e;
+            outline-offset: -2px;
+        }
+}
     }
 
     // Dodatkowa kolumna administratora

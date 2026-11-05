@@ -1,4 +1,6 @@
 
+import { useNavigate } from 'react-router-dom';
+
 import React, { useEffect, useMemo, useState } from 'react';
 import useStore from '../store/useStore';
 import {
@@ -28,6 +30,8 @@ export const ReportsPage = () => {
     } = useStore();
 
     const isAdmin = user?.role === 'admin';
+
+    const navigate = useNavigate();
 
     const [filters, setFilters] = useState({
         id: '',
@@ -478,7 +482,26 @@ export const ReportsPage = () => {
                                 {paginatedReports.length > 0 ? (
                                     paginatedReports.map((report) => (
 
-                                        <div className="table-row" key={report.id}>
+                                        <div className="table-row table-row--clickable"
+                                            key={report.id}
+                                            onClick={() => navigate(
+                                                isAdmin
+                                                    ? `/reports/${report.id}`
+                                                    : `/user-reports/${report.id}`
+                                            )}
+                                            role="button"
+                                            tabIndex={0}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter' || e.key === ' ') {
+                                                    e.preventDefault();
+                                                    navigate(
+                                                        isAdmin
+                                                            ? `/reports/${report.id}`
+                                                            : `/user-reports/${report.id}`
+                                                    );
+                                                }
+                                            }}
+                                        title="Otwórz szczegóły zgłoszenia">
 
                                             {/* 1. Numer zgłoszenia */}
                                             <div className="table-cell table-cell--id">
