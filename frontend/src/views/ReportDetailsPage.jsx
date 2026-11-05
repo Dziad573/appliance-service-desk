@@ -1,5 +1,5 @@
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
     ArrowLeft,
@@ -10,11 +10,16 @@ import {
     CalendarDays,
     Hash,
     AlertCircle,
-    CheckCircle2
+    CheckCircle2,
+    MessageCircle,
+    Send,
+    Reply,
+    X
 } from 'lucide-react';
 
 import useStore from '../store/useStore';
 import { getReportById } from '../services/reportsService';
+import { getComments, addComment } from '../services/commentsService';
 
 import './ReportDetailsPage.scss';
 
@@ -29,6 +34,14 @@ export const ReportDetailsPage = () => {
     const [report, setReport] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
+    const [comments, setComments] = useState([]);
+    const [commentsLoading, setCommentsLoading] = useState(false);
+    const [commentsError, setCommentsError] = useState('');
+    const [commentText, setCommentText] = useState('');
+    const [replyTo, setReplyTo] = useState(null);
+    const [sendingComment, setSendingComment] = useState(false);
+    const commentsListRef = useRef(null);
+    const commentRefs = useRef({});
 
     // Pobieranie danych reklamacji
     useEffect(() => {
@@ -286,6 +299,84 @@ export const ReportDetailsPage = () => {
                                         </div>
                                     )}
 
+                                </section>
+
+                                {/* Komunikator komentarzy */}
+                                <section className="details-card comments-card">
+                                    <div className="details-card__header">
+                                        <div className="details-card__icon">
+                                            <MessageCircle size={19} />
+                                        </div>
+                                        <div>
+                                            <h2>Komentarze</h2>
+                                            <p>Rozmowa dotycząca reklamacji</p>
+                                        </div>
+                                        <span className="comments-count">{comments.length}</span>
+                                    </div>
+
+                                    <div className="comments-list" ref={commentsListRef}>
+                                        {commentsLoading ? (
+                                            <p className="comments-empty">Ładowanie komentarzy...</p>
+                                        ) : comments.length === 0 ? (
+                                            <p className="comments-empty">Brak komentarzy. Rozpocznij rozmowę.</p>
+                                        ) : comments.map((comment) => (
+                                            <article
+                                                key={comment.id}
+                                                ref={(node) => { commentRefs.current[comment.id] = node; }}
+                                                className={`comment-item ${String(comment.user_id) === String(user?.id) ? 'comment-item--own' : ''}`}
+                                            >
+                                                <div className="comment-meta">
+                                                    <strong>{comment.author?.login || `Użytkownik #${comment.user_id}`}</strong>
+                                                    <span>{formatDate(comment.created_at)}</span>
+                                                </div>
+
+                                                {comment.parent && (
+                                                    <button
+                                                        type="button"
+                                                        className="comment-parent-link"
+                                                        onClick={() => jumpToComment(comment.parent.id)}
+                                                    >
+                                                        <Reply size={13} />
+                                                        Odpowiedź na komentarz #{comment.parent.id}: {comment.parent.content}
+                                                    </button>
+                                                )}
+
+                                                <div className="comment-bubble">{comment.content}</div>
+                                                <button
+                                                    type="button"
+                                                    className="comment-reply-button"
+                                                    onClick={() => setReplyTo(comment)}
+                                                    title="Odpowiedz na komentarz"
+                                                >
+                                                    <Reply size={14} /> Odpowiedz
+                                                </button>
+                                            </article>
+                                        ))}
+                                    </div>
+
+                                    {commentsError && <p className="comments-error">{commentsError}</p>}
+
+                                    {replyTo && (
+                                        <div className="comment-replying">
+                                            <span>Odpowiadasz na komentarz #{replyTo.id} ({replyTo.author?.login || `użytkownik #${replyTo.user_id}`})</span>
+                                            <button type="button" onClick={() => setReplyTo(null)} aria-label="Anuluj odpowiedź">
+                                                <X size={16} />
+                                            </button>
+                                        </div>
+                                    )}
+
+                                    <form className="comment-composer" onSubmit={submitComment}>
+                                        <textarea
+                                            value={commentText}
+                                            onChange={(event) => setCommentText(event.target.value)}
+                                            placeholder="Napisz komentarz..."
+                                            rows={2}
+                                            maxLength={5000}
+                                        />
+                                        <button type="submit" disabled={!commentText.trim() || sendingComment} aria-label="Wyślij komentarz">
+                                            <Send size={17} />
+                                        </button>
+                                    </form>
                                 </section>
 
                             </aside>
