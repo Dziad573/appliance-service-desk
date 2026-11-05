@@ -5,7 +5,7 @@ const port = 3001;
 
 app.use(cors({ origin: 'http://localhost:3000', credentials: true }));
 
-const { sequelize, User, Report, Comment } = require('./models');
+const { sequelize, User, Report, Comment, ReportStatusHistory } = require('./models');
 const { Op } = require('sequelize');
 
 app.use(express.json());
@@ -116,6 +116,131 @@ app.get('/reports/detail/:reportId', async (req, res) => {
     }
 });
 
+
+
+
+// Statusy procesu reklamacji
+const REPORT_STATUSES = [
+    'Nowe',
+    'Przyjęte do realizacji',
+    'Diagnoza',
+    'W naprawie',
+    'Testy / kontrola jakości',
+    'Gotowe do odbioru / wysyłki'
+];
+const TERMINAL_STATUSES = ['Zakończona', 'Odrzucona', 'Anulowana'];
+const PAUSE_REASONS = [
+    'Oczekiwanie na klienta',
+    'Oczekiwanie na części',
+    'Oczekiwanie na dostawcę',
+    'Problem techniczny',
+    'Inny powód'
+];
+
+app.get('/reports/:reportId/status-history', async (req, res) => {
+    try {
+        const reportId = Number(req.params.reportId);
+        if (!Number.isInteger(reportId) || reportId <= 0) return res.status(400).json({ message: 'Nieprawidłowy numer reklamacji' });
+        const history = await ReportStatusHistory.findAll({
+            where: { report_id: reportId },
+            include: [{ model: User, as: 'changedBy', attributes: ['id', 'login'], required: false }],
+            order: [['created_at', 'ASC'], ['id', 'ASC']]
+        });
+        return res.json(history);
+    } catch (err) {
+        console.error('Błąd pobierania historii statusów:', err);
+        return res.status(500).json({ message: 'Błąd pobierania historii statusów' });
+    }
+});
+
+app.patch('/reports/:reportId/status', async (req, res) => {
+    try {
+        const reportId = Number(req.params.reportId);
+        const { status, changed_by } = req.body;
+        const changedBy = changed_by == null ? null : Number(changed_by);
+        if (!Number.isInteger(reportId) || reportId <= 0 || (!REPORT_STATUSES.includes(status) && !TERMINAL_STATUSES.includes(status))) {
+            return res.status(400).json({ message: 'Nieprawidłowe dane zmiany statusu' });
+        }
+        if (changedBy !== null && (!Number.isInteger(changedBy) || changedBy <= 0)) return res.status(400).json({ message: 'Nieprawidłowy użytkownik' });
+        const report = await Report.findByPk(reportId);
+        if (!report) return res.status(404).json({ message: 'Nie znaleziono reklamacji' });
+        if (report.is_paused) return res.status(409).json({ message: 'Najpierw wznów reklamację' });
+        if (TERMINAL_STATUSES.includes(report.status)) return res.status(409).json({ message: 'Reklamacja jest już zakończona' });
+        const currentIndex = REPORT_STATUSES.indexOf(report.status);
+        const nextIndex = REPORT_STATUSES.indexOf(status);
+
+        // Dozwolone zakończenia zależą od aktualnego etapu reklamacji.
+        const allowedTerminalTransitions = {
+            'Nowe': ['Anulowana'],
+            'Diagnoza': ['Odrzucona', 'Zakończona'],
+            'Gotowe do odbioru / wysyłki': ['Zakończona']
+        };
+        if (TERMINAL_STATUSES.includes(status)) {
+            const allowed = allowedTerminalTransitions[report.status] || [];
+            if (!allowed.includes(status)) {
+                return res.status(409).json({ message: 'Nie można wykonać tej operacji na obecnym etapie reklamacji' });
+            }
+        } else if (nextIndex !== currentIndex + 1) {
+            return res.status(409).json({ message: 'Można przejść tylko do kolejnego etapu procesu' });
+        }
+        const oldStatus = report.status;
+        report.status = status;
+        await report.save();
+        await ReportStatusHistory.create({ report_id: reportId, old_status: oldStatus, new_status: status, action: 'status', changed_by: changedBy });
+        return res.json(report);
+    } catch (err) {
+        console.error('Błąd zmiany statusu:', err);
+        return res.status(500).json({ message: 'Błąd zmiany statusu' });
+    }
+});
+
+app.post('/reports/:reportId/pause', async (req, res) => {
+    try {
+        const reportId = Number(req.params.reportId);
+        const { reason, note, changed_by } = req.body;
+        const changedBy = changed_by == null ? null : Number(changed_by);
+        if (!Number.isInteger(reportId) || reportId <= 0 || !PAUSE_REASONS.includes(reason)) return res.status(400).json({ message: 'Wybierz prawidłowy powód wstrzymania' });
+        if (changedBy !== null && (!Number.isInteger(changedBy) || changedBy <= 0)) return res.status(400).json({ message: 'Nieprawidłowy użytkownik' });
+        const report = await Report.findByPk(reportId);
+        if (!report) return res.status(404).json({ message: 'Nie znaleziono reklamacji' });
+        if (TERMINAL_STATUSES.includes(report.status)) return res.status(409).json({ message: 'Nie można wstrzymać zamkniętej reklamacji' });
+        if (report.is_paused) return res.status(409).json({ message: 'Reklamacja jest już wstrzymana' });
+        report.is_paused = true;
+        report.paused_at = new Date();
+        report.pause_reason = reason;
+        report.pause_note = typeof note === 'string' ? note.trim() : null;
+        await report.save();
+        await ReportStatusHistory.create({ report_id: reportId, old_status: report.status, new_status: report.status, action: 'pause', reason, note: report.pause_note, changed_by: changedBy });
+        return res.json(report);
+    } catch (err) {
+        console.error('Błąd wstrzymywania reklamacji:', err);
+        return res.status(500).json({ message: 'Błąd wstrzymywania reklamacji' });
+    }
+});
+
+app.post('/reports/:reportId/resume', async (req, res) => {
+    try {
+        const reportId = Number(req.params.reportId);
+        const changedBy = req.body.changed_by == null ? null : Number(req.body.changed_by);
+        if (!Number.isInteger(reportId) || reportId <= 0) return res.status(400).json({ message: 'Nieprawidłowy numer reklamacji' });
+        if (changedBy !== null && (!Number.isInteger(changedBy) || changedBy <= 0)) return res.status(400).json({ message: 'Nieprawidłowy użytkownik' });
+        const report = await Report.findByPk(reportId);
+        if (!report) return res.status(404).json({ message: 'Nie znaleziono reklamacji' });
+        if (!report.is_paused) return res.status(409).json({ message: 'Reklamacja nie jest wstrzymana' });
+        const reason = report.pause_reason;
+        const note = report.pause_note;
+        report.is_paused = false;
+        report.paused_at = null;
+        report.pause_reason = null;
+        report.pause_note = null;
+        await report.save();
+        await ReportStatusHistory.create({ report_id: reportId, old_status: report.status, new_status: report.status, action: 'resume', reason, note, changed_by: changedBy });
+        return res.json(report);
+    } catch (err) {
+        console.error('Błąd wznawiania reklamacji:', err);
+        return res.status(500).json({ message: 'Błąd wznawiania reklamacji' });
+    }
+});
 
 // Komentarze reklamacji
 app.get('/reports/:reportId/comments', async (req, res) => {

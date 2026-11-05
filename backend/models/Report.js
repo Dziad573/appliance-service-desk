@@ -17,11 +17,11 @@ module.exports = (sequelize, DataTypes) => {
             type: DataTypes.TEXT, 
             allowNull: false 
         },
-        status: { 
-            type: DataTypes.STRING(50), 
-            allowNull: false,
-            defaultValue: 'Nowe'
-        },
+        status: { type: DataTypes.STRING(50), allowNull: false, defaultValue: 'Nowe' },
+        is_paused: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+        paused_at: { type: DataTypes.DATE, allowNull: true },
+        pause_reason: { type: DataTypes.STRING(100), allowNull: true },
+        pause_note: { type: DataTypes.TEXT, allowNull: true },
         created_at: { 
             type: DataTypes.DATE, 
             defaultValue: DataTypes.NOW 

@@ -10,7 +10,6 @@ import {
     CalendarDays,
     Hash,
     AlertCircle,
-    CheckCircle2,
     MessageCircle,
     Send,
     Reply,
@@ -20,6 +19,7 @@ import {
 import useStore from '../store/useStore';
 import { getReportById } from '../services/reportsService';
 import { getComments, addComment } from '../services/commentsService';
+import { updateReportStatus, pauseReport, resumeReport, getReportStatusHistory } from '../services/reportStatusService';
 
 import './ReportDetailsPage.scss';
 
@@ -40,6 +40,12 @@ export const ReportDetailsPage = () => {
     const [commentText, setCommentText] = useState('');
     const [replyTo, setReplyTo] = useState(null);
     const [sendingComment, setSendingComment] = useState(false);
+    const [statusHistory, setStatusHistory] = useState([]);
+    const [statusBusy, setStatusBusy] = useState(false);
+    const [statusError, setStatusError] = useState('');
+    const [showPauseForm, setShowPauseForm] = useState(false);
+    const [pauseReason, setPauseReason] = useState('');
+    const [pauseNote, setPauseNote] = useState('');
     const commentsListRef = useRef(null);
     const commentRefs = useRef({});
 
@@ -101,32 +107,6 @@ export const ReportDetailsPage = () => {
         });
     };
 
-    // Status reklamacji
-    const getStatus = (status) => {
-        switch (status?.toLowerCase()) {
-            case 'zakończone':
-                return {
-                    className: 'success',
-                    icon: <CheckCircle2 size={16} />,
-                    label: 'Zakończone'
-                };
-
-            case 'w trakcie':
-                return {
-                    className: 'warning',
-                    icon: <Clock size={16} />,
-                    label: 'W trakcie'
-                };
-
-            default:
-                return {
-                    className: 'new',
-                    icon: <AlertCircle size={16} />,
-                    label: status || 'Nowe'
-                };
-        }
-    };
-
     const backToList = () => {
         navigate(isAdmin ? '/reports' : '/user-reports');
     };
@@ -136,99 +116,122 @@ export const ReportDetailsPage = () => {
         if (!report?.id) return;
 
         let cancelled = false;
-
         const fetchComments = async () => {
             try {
                 setCommentsLoading(true);
                 setCommentsError('');
-
                 const data = await getComments(report.id);
-
-                if (!cancelled) {
-                    setComments(Array.isArray(data) ? data : []);
-                }
+                if (!cancelled) setComments(Array.isArray(data) ? data : []);
             } catch (err) {
                 if (!cancelled) {
-                    setCommentsError(
-                        err.response?.data?.error ||
-                        'Nie udało się pobrać komentarzy.'
-                    );
+                    setCommentsError(err.response?.data?.error || 'Nie udało się pobrać komentarzy.');
                 }
             } finally {
-                if (!cancelled) {
-                    setCommentsLoading(false);
-                }
+                if (!cancelled) setCommentsLoading(false);
             }
         };
 
         fetchComments();
-
-        return () => {
-            cancelled = true;
-        };
+        return () => { cancelled = true; };
     }, [report?.id]);
 
-    // Przewijanie listy do najnowszego komentarza
+    const processStatuses = [
+        'Nowe',
+        'Przyjęte do realizacji',
+        'Diagnoza',
+        'W naprawie',
+        'Testy / kontrola jakości',
+        'Gotowe do odbioru / wysyłki'
+    ];
+    const terminalStatuses = ['Zakończona', 'Odrzucona', 'Anulowana'];
+    const pauseReasons = ['Oczekiwanie na klienta', 'Oczekiwanie na części', 'Oczekiwanie na dostawcę', 'Problem techniczny', 'Inny powód'];
+
+    const loadStatusHistory = async () => {
+        if (!report?.id) return;
+        try { setStatusHistory(await getReportStatusHistory(report.id)); }
+        catch (err) { console.error('Nie udało się pobrać historii statusów:', err); }
+    };
+
+    useEffect(() => { loadStatusHistory(); }, [report?.id]);
+
+    const handleStatusChange = async (nextStatus) => {
+        if (!isAdmin || statusBusy) return;
+        try {
+            setStatusBusy(true); setStatusError('');
+            const updated = await updateReportStatus(report.id, nextStatus, user?.id);
+            setReport(updated);
+            await loadStatusHistory();
+        } catch (err) { setStatusError(err.response?.data?.message || 'Nie udało się zmienić statusu.'); }
+        finally { setStatusBusy(false); }
+    };
+
+    const handlePause = async (event) => {
+        event.preventDefault();
+        if (!pauseReason || statusBusy) return;
+        try {
+            setStatusBusy(true); setStatusError('');
+            const updated = await pauseReport(report.id, pauseReason, pauseNote, user?.id);
+            setReport(updated); setShowPauseForm(false); setPauseReason(''); setPauseNote('');
+            await loadStatusHistory();
+        } catch (err) { setStatusError(err.response?.data?.message || 'Nie udało się wstrzymać reklamacji.'); }
+        finally { setStatusBusy(false); }
+    };
+
+    const handleResume = async () => {
+        try {
+            setStatusBusy(true); setStatusError('');
+            const updated = await resumeReport(report.id, user?.id);
+            setReport(updated); await loadStatusHistory();
+        } catch (err) { setStatusError(err.response?.data?.message || 'Nie udało się wznowić reklamacji.'); }
+        finally { setStatusBusy(false); }
+    };
+
+    const currentStatusIndex = processStatuses.indexOf(report?.status);
+    const isTerminal = terminalStatuses.includes(report?.status);
+    const canCancel = report?.status === 'Nowe';
+    const canReject = report?.status === 'Diagnoza';
+    const isLastProcessStage = report?.status === 'Gotowe do odbioru / wysyłki';
+    const nextProcessStatus = currentStatusIndex >= 0
+        ? processStatuses[currentStatusIndex + 1]
+        : null;
+
+    // Po dodaniu komentarza przewiń listę do najnowszej wiadomości
     useEffect(() => {
         if (commentsListRef.current) {
-            commentsListRef.current.scrollTop =
-                commentsListRef.current.scrollHeight;
+            commentsListRef.current.scrollTop = commentsListRef.current.scrollHeight;
         }
     }, [comments]);
 
-    // Wysyłanie komentarza lub odpowiedzi
     const submitComment = async (event) => {
         event.preventDefault();
-
         const content = commentText.trim();
-
-        if (!content || !user?.id || !report?.id || sendingComment) {
-            return;
-        }
+        if (!content || !user?.id || !report?.id || sendingComment) return;
 
         try {
             setSendingComment(true);
             setCommentsError('');
-
             const createdComment = await addComment(report.id, {
                 user_id: user.id,
                 content,
                 parent_comment_id: replyTo?.id ?? null
             });
-
             setComments((current) => [...current, createdComment]);
-
             setCommentText('');
             setReplyTo(null);
-
         } catch (err) {
-            setCommentsError(
-                err.response?.data?.error ||
-                'Nie udało się wysłać komentarza.'
-            );
+            setCommentsError(err.response?.data?.error || 'Nie udało się wysłać komentarza.');
         } finally {
             setSendingComment(false);
         }
     };
 
-    // Przewijanie do komentarza, na który udzielono odpowiedzi
     const jumpToComment = (commentId) => {
         const element = commentRefs.current[commentId];
-
         if (!element) return;
-
-        element.scrollIntoView({
-            behavior: 'smooth',
-            block: 'center'
-        });
-
+        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
         element.classList.add('comment-item--highlight');
-
-        window.setTimeout(() => {
-            element.classList.remove('comment-item--highlight');
-        }, 1800);
+        window.setTimeout(() => element.classList.remove('comment-item--highlight'), 1800);
     };
-
 
     return (
         <div className="report-details-page">
@@ -270,12 +273,52 @@ export const ReportDetailsPage = () => {
                                 </p>
                             </div>
 
-                            <div className={`report-details-status report-details-status--${getStatus(report.status).className}`}>
-                                {getStatus(report.status).icon}
-                                {getStatus(report.status).label}
-                            </div>
 
                         </div>
+
+                        {/* Pasek postępu i sterowanie statusem */}
+                        <section className="details-card report-progress-card">
+                            <div className="report-progress-heading">
+                                <div>
+                                    <h2>Przebieg reklamacji</h2>
+                                    <p>Etapy realizacji zgłoszenia</p>
+                                </div>
+                            </div>
+                            <div className={`report-progress-track ${report.is_paused ? 'is-paused' : ''} ${isTerminal ? 'is-terminal' : ''}`} role="list" aria-label="Etapy reklamacji">
+                                {processStatuses.map((step, index) => {
+                                    const done = currentStatusIndex >= 0 && index < currentStatusIndex;
+                                    const active = index === currentStatusIndex;
+                                    const completed = isTerminal && report.status === 'Zakończona' || done;
+                                    return (
+                                        <div key={step} role="listitem" className={`report-progress-segment ${completed ? 'is-done' : ''} ${active ? 'is-active' : ''} ${report.is_paused && active ? 'is-paused' : ''}`}>
+                                            <span className="report-progress-segment__text">{completed ? '✓' : step}</span>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                            {isTerminal && <div className={`report-terminal-result report-terminal-result--${report.status === 'Zakończona' ? 'success' : report.status === 'Odrzucona' ? 'rejected' : 'cancelled'}`}>{report.status === 'Zakończona' ? 'Reklamacja zakończona' : report.status === 'Odrzucona' ? 'Reklamacja odrzucona' : 'Reklamacja anulowana'}</div>}
+                            {report.is_paused && <div className="report-paused-info"><strong>Reklamacja wstrzymana — {report.pause_reason}</strong>{report.pause_note && <p>{report.pause_note}</p>}<small>Wstrzymano: {formatDate(report.paused_at)}</small></div>}
+                            {isAdmin && !isTerminal && <div className="report-progress-actions">
+                                {!report.is_paused ? <>
+                                    <button type="button" className="report-action-button report-action-button--primary" disabled={statusBusy || !nextProcessStatus && !isLastProcessStage} onClick={() => handleStatusChange(isLastProcessStage ? 'Zakończona' : nextProcessStatus)}>
+                                        {isLastProcessStage ? 'Zakończ reklamację' : '✓  Oznacz etap jako zakończony'}
+                                    </button>
+                                    <button type="button" className="report-action-button" disabled={statusBusy} onClick={() => setShowPauseForm(v => !v)}>Wstrzymaj reklamację</button>
+                                    {canCancel && <button type="button" className="report-action-button report-action-button--subtle" disabled={statusBusy} onClick={() => handleStatusChange('Anulowana')}>Anuluj reklamację</button>}
+                                    {canReject && <div className="report-terminal-actions">
+                                        <button type="button" className="report-action-button report-action-button--subtle" disabled={statusBusy} onClick={() => handleStatusChange('Odrzucona')}>Odrzuć reklamację</button>
+                                        <button type="button" className="report-action-button report-action-button--subtle" disabled={statusBusy} onClick={() => handleStatusChange('Zakończona')}>Zakończ bez naprawy</button>
+                                    </div>}
+                                </> : <button type="button" className="report-action-button report-action-button--primary" disabled={statusBusy} onClick={handleResume}>Wznów reklamację</button>}
+                            </div>}
+                            {showPauseForm && <form className="report-pause-form" onSubmit={handlePause}>
+                                <label>Powód wstrzymania<select value={pauseReason} onChange={e => setPauseReason(e.target.value)} required><option value="">Wybierz powód...</option>{pauseReasons.map(reason => <option key={reason} value={reason}>{reason}</option>)}</select></label>
+                                <label>Dodatkowe informacje<textarea value={pauseNote} onChange={e => setPauseNote(e.target.value)} rows={2} placeholder="Opcjonalny opis..." /></label>
+                                <button type="submit" className="report-action-button report-action-button--primary" disabled={statusBusy || !pauseReason}>Potwierdź wstrzymanie</button>
+                            </form>}
+                            {statusError && <p className="report-status-error">{statusError}</p>}
+                            <div className="report-status-history"><strong>Historia statusów</strong>{statusHistory.length === 0 ? <p>Brak zapisanych zmian.</p> : statusHistory.map(item => <div className="report-status-history__item" key={item.id}><span>{formatDate(item.created_at)} · {item.changedBy?.login || (item.changed_by ? `Użytkownik #${item.changed_by}` : 'System')}</span><strong>{item.action === 'pause' ? `Wstrzymano: ${item.reason}` : item.action === 'resume' ? 'Wznowiono reklamację' : `${item.old_status || '—'} → ${item.new_status}`}</strong>{item.note && <small>{item.note}</small>}</div>)}</div>
+                        </section>
 
                         {/* Zawartość strony */}
                         <div className="report-details-layout">
@@ -323,12 +366,6 @@ export const ReportDetailsPage = () => {
                                             </strong>
                                         </div>
 
-                                        <div className="details-field">
-                                            <span>Aktualny status</span>
-                                            <strong>
-                                                {getStatus(report.status).label}
-                                            </strong>
-                                        </div>
 
                                         {isAdmin && (
                                             <div className="details-field">
