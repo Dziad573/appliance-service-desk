@@ -7,8 +7,18 @@ export const HomePage = () => {
         theme,
         
         setUser,
+        setUpcomingCampaigns,
+        setTopCampaigns,
+        setNumberOfCampaigns,
+        setNumberOfInfluencers,
+        setNumberOfLikes,
 
         user,
+        upcomingCampaigns,
+        topCampaigns,
+        numberOfCampaigns,
+        numberOfInfluencers,
+        numberOfLikesForAllCampaigns,
 
     } = useStore();
     

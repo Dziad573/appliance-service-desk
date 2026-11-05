@@ -20,8 +20,8 @@ export const App = () => {
                 <Route path="/login" element={user ? <Navigate to="/user-panel" /> : <LoginPage />} />
                 <Route path="/register" element={user ? <Navigate to="/user-panel" /> : <RegisterPage />} />
                 <Route path="/user-panel" element={user ? <UserPanelPage /> : <Navigate to="/login" />} />
-                <Route path="/reports" element={user?.role === 'admin' ? <ReportsPage /> : <Navigate to="/" />} />
-                <Route path="/user-reports" element={user?.role === 'user' ? <ReportsPage /> : <Navigate to="/" />} />
+                <Route path="/reports" element={user?.role === 'admin' ? <ReportsPage view="staff" /> : <Navigate to="/" />}/>
+                <Route path="/user-reports" element={user?.role === 'user'  ? <ReportsPage view="customer" /> : <Navigate to="/" />}/>  
             </Routes>
         </Router>
     );
