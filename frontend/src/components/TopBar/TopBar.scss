@@ -326,3 +326,32 @@
 
     &:hover { background: #f1f7fd; border-color: #0176d3; color: #005fb2; }
 }
+
+/* Spójny kolor brandu i obu akcji w topbarze */
+.topbar-prz__logo .text-logo,
+.topbar-prz__logo .text-logo:visited {
+    color: #16325c !important;
+}
+.topbar-prz__logo .text-logo:hover {
+    color: #0176d3 !important;
+}
+
+.topbar-prz__actions .btn-login,
+.topbar-prz__actions .btn-user-panel {
+    min-height: 40px;
+    padding: 0 17px;
+    background: #0176d3 !important;
+    background-color: #0176d3 !important;
+    color: #ffffff !important;
+    border: 1px solid #0176d3 !important;
+    border-radius: 7px;
+    font-weight: 650;
+    text-decoration: none;
+}
+.topbar-prz__actions .btn-login:hover,
+.topbar-prz__actions .btn-user-panel:hover {
+    background: #005fb2 !important;
+    background-color: #005fb2 !important;
+    border-color: #005fb2 !important;
+    color: #ffffff !important;
+}

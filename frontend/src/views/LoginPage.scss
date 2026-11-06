@@ -121,3 +121,17 @@
         &:hover { color: #005fb2; }
     }
 }
+
+/* Wymuszenie wspólnego koloru CTA niezależnie od globalnych styli button */
+.login-container .login-card button.login-card__button {
+    background: #0176d3 !important;
+    background-color: #0176d3 !important;
+    color: #fff !important;
+    border: 1px solid #0176d3 !important;
+}
+.login-container .login-card button.login-card__button:hover,
+.login-container .login-card button.login-card__button:focus-visible {
+    background: #005fb2 !important;
+    background-color: #005fb2 !important;
+    border-color: #005fb2 !important;
+}

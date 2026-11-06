@@ -11,7 +11,10 @@
 
 .report-details-page {
     min-height: 100vh;
-    background: var(--bg-gray);
+    background-color: #f4f7fb;
+    background-image:
+        radial-gradient(ellipse at 88% 0%, rgba(1, 118, 211, 0.10), transparent 42%),
+        linear-gradient(105deg, #f4f8fd 0%, #edf5fd 100%);
     color: var(--text-main);
     padding: 30px 20px 60px;
     box-sizing: border-box;

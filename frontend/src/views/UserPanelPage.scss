@@ -510,3 +510,18 @@
     .badge--rejected { background: #ffe4e6; color: #be123c; }
     .badge--cancelled { background: #e5e7eb; color: #4b5563; }
 }
+
+/* Delikatna błękitna poświata strony, taka sama jak w reports-page */
+.user-panel-container {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    background-color: #f4f7fb;
+    background-image:
+        radial-gradient(ellipse at 88% 0%, rgba(1, 118, 211, 0.10), transparent 42%),
+        linear-gradient(105deg, #f4f8fd 0%, #edf5fd 100%);
+}
+.user-panel-container .main-workspace {
+    position: relative;
+    z-index: 1;
+}

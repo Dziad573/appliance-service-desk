@@ -127,3 +127,17 @@
         &:hover { color: #005fb2; }
     }
 }
+
+/* Wymuszenie identycznego CTA jak na ekranie logowania */
+.register-container .register-card button.register-card__button {
+    background: #0176d3 !important;
+    background-color: #0176d3 !important;
+    color: #fff !important;
+    border: 1px solid #0176d3 !important;
+}
+.register-container .register-card button.register-card__button:hover,
+.register-container .register-card button.register-card__button:focus-visible {
+    background: #005fb2 !important;
+    background-color: #005fb2 !important;
+    border-color: #005fb2 !important;
+}
