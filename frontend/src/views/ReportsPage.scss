@@ -1,3 +1,14 @@
+:root {
+    --bg-gray: #f3f4f6;
+    --bg-white: #ffffff;
+    --text-main: #1f2937;
+    --text-muted: #6b7280;
+    --border-color: #e5e7eb;
+    --border-hover: #d1d5db;
+    /* Akcenty z logo (opcjonalne, dla spójności z nawigacją) */
+    --prz-blue: #003b7e;
+    --primary-color: #2563eb; /* Główny kolor np. linków, obramowań focus */
+}
 
 .reports-page {
     display: flex;
@@ -12,7 +23,7 @@
         &__overlay {
             position: absolute;
             inset: 0;
-            background-color: rgba(0, 0, 0, 0.4);
+            background-color: var(--prz-blue); /* Użycie ciemnoniebieskiego z paska */
             color: white;
             display: flex;
             flex-direction: column;
@@ -20,24 +31,30 @@
             align-items: center;
             text-align: center;
             padding: 2rem;
+            /* Subtelny gradient, żeby nagłówek nie był płaski */
+            background: linear-gradient(135deg, var(--prz-blue) 0%, #0052a5 100%);
         }
 
         &__title {
             font-size: 2.5rem;
+            margin: 0;
+            font-weight: 700;
         }
 
         &__subtitle {
-            font-size: 1.2rem;
-            margin-top: 1rem;
+            font-size: 1.1rem;
+            margin-top: 0.75rem;
+            opacity: 0.9;
         }
     }
 }
 
 .reports-page-container {
-    background-color: #121214;
-    color: #e1e1e6;
+    background-color: var(--bg-gray);
+    color: var(--text-main);
     min-height: 100vh;
-
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    /* Statystyki pod nagłówkiem (wysunięte do góry) */
     .stats-bar {
         display: flex;
         gap: 20px;
@@ -48,21 +65,26 @@
         z-index: 10;
 
         .stat-card {
-            background: #202024;
-            border: 1px solid #323238;
+            background: var(--bg-white);
+            border: 1px solid var(--border-color);
             padding: 15px 25px;
             border-radius: 8px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            flex: 1; /* Pozwala statystykom równo się rozkładać */
+            min-width: 200px;
 
             h3 {
-                font-size: 0.85rem;
-                color: #8d8d99;
-                margin-bottom: 5px;
+                font-size: 0.9rem;
+                color: var(--text-muted);
+                margin: 0 0 5px 0;
+                font-weight: 600;
             }
 
             p {
-                font-size: 1.5rem;
+                font-size: 1.75rem;
                 font-weight: bold;
-                color: #00b37e;
+                color: var(--primary-color);
+                margin: 0;
             }
         }
     }
@@ -72,8 +94,7 @@
         margin: 0 auto;
         padding: 0 20px 40px;
     }
-
-    // Pasek nad tabelą
+    // Pasek z tytułem nad tabelą i przyciskiem czyszczenia
     .table-toolbar {
         display: flex;
         justify-content: space-between;
@@ -82,44 +103,46 @@
         margin: 30px 0 15px;
 
         h2 {
-            font-size: 1.2rem;
+            font-size: 1.5rem;
             margin: 0 0 5px;
-            color: #f1f1f5;
+            color: var(--text-main);
         }
 
         p {
-            color: #8d8d99;
-            font-size: 0.85rem;
+            color: var(--text-muted);
+            font-size: 0.9rem;
             margin: 0;
         }
 
         .clear-filters {
-            background: #202024;
-            border: 1px solid #323238;
+            background: var(--bg-white);
+            border: 1px solid var(--border-color);
             border-radius: 6px;
-            color: #c4c4cc;
+            color: var(--text-main);
             padding: 9px 15px;
+            font-weight: 600;
             cursor: pointer;
             white-space: nowrap;
-            transition: 0.2s;
+            transition: all 0.2s ease;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
 
             &:hover {
-                border-color: #00b37e;
-                color: #00b37e;
+                background: #f9fafb;
+                border-color: var(--border-hover);
+                color: var(--primary-color);
             }
         }
     }
-
-    // Kontener tabeli
+    // Kontener okalający całą tabelę
     .reports-table-wrapper {
         width: 100%;
         overflow-x: auto;
-        border: 1px solid #323238;
-        border-radius: 9px;
-        background: #202024;
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        background: var(--bg-white);
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
     }
-
-    // Tabela
+    // Siatka dla tabeli
     .reports-table {
         width: 100%;
         min-width: 1050px;
@@ -128,7 +151,6 @@
             min-width: 1170px;
         }
     }
-
     // Wspólny układ kolumn nagłówka i danych
     .table-header,
     .table-row {
@@ -139,20 +161,20 @@
         & > * {
             min-width: 0;
         }
+
         &--clickable {
-        cursor: pointer;
+            cursor: pointer;
 
-        &:hover {
-            background: #303039;
-        }
+            &:hover {
+                background: #f8fafc; /* Bardzo delikatny niebieskawo-szary przy najechaniu */
+            }
 
-        &:focus-visible {
-            outline: 2px solid #00b37e;
-            outline-offset: -2px;
+            &:focus-visible {
+                outline: 2px solid var(--primary-color);
+                outline-offset: -2px;
+            }
         }
-}
     }
-
     // Dodatkowa kolumna administratora
     .reports-table--admin {
         .table-header,
@@ -160,21 +182,22 @@
             grid-template-columns: 120px 190px minmax(280px, 1fr) 155px 200px 115px;
         }
     }
-
     // Nagłówek tabeli
     .table-header {
         position: sticky;
         top: 0;
         z-index: 2;
-        background: #29292f;
-        border-bottom: 1px solid #41414b;
+        background: #f9fafb; /* Bardzo jasny szary dla odcięcia nagłówka */
+        border-bottom: 1px solid var(--border-color);
+        border-top-left-radius: 12px;
+        border-top-right-radius: 12px;
 
         &__cell {
             padding: 12px 10px;
             display: flex;
             flex-direction: column;
             gap: 9px;
-            border-right: 1px solid #383840;
+            border-right: 1px solid var(--border-color);
             overflow: hidden;
 
             &:last-child {
@@ -186,33 +209,32 @@
                 width: 100%;
                 min-width: 0;
                 box-sizing: border-box;
-                background: #17171a;
-                color: #e1e1e6;
-                border: 1px solid #41414b;
+                background: var(--bg-white);
+                color: var(--text-main);
+                border: 1px solid var(--border-color);
                 border-radius: 5px;
                 padding: 7px 8px;
                 font-size: 0.75rem;
                 outline: none;
+                transition: border-color 0.2s;
 
                 &:focus {
-                    border-color: #00b37e;
+                    border-color: var(--primary-color);
+                    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
                 }
 
                 &::placeholder {
-                    color: #73737e;
+                    color: #9ca3af;
                 }
-
-                color-scheme: dark;
             }
 
             label {
-                color: #8d8d99;
+                color: var(--text-muted);
                 font-size: 0.7rem;
                 margin-bottom: -5px;
             }
         }
-
-        // Nagłówek z możliwością sortowania
+        // Przyciski sortowania w nagłówku
         &__sort {
             display: flex;
             align-items: center;
@@ -222,7 +244,7 @@
             padding: 0;
             background: transparent;
             border: none;
-            color: #e1e1e6;
+            color: var(--text-main);
             font-size: 0.8rem;
             font-weight: 700;
             text-align: left;
@@ -230,42 +252,37 @@
 
             svg {
                 flex-shrink: 0;
-                color: #8d8d99;
+                color: #9ca3af;
+                transition: color 0.2s;
             }
 
             &:hover {
-                color: #00b37e;
+                color: var(--primary-color);
 
                 svg {
-                    color: #00b37e;
+                    color: var(--primary-color);
                 }
             }
         }
     }
-
-    // Kolumna daty - trochę więcej miejsca na dodatkowe filtry
+    // Więcej miejsca na małe fonty w dacie
     .table-header__cell--date {
         select,
         input {
             font-size: 0.75rem;
         }
     }
-
     // Wiersze danych
     .table-row {
         min-height: 64px;
-        border-bottom: 1px solid #323238;
+        border-bottom: 1px solid var(--border-color);
         transition: background 0.15s ease;
 
         &:last-child {
             border-bottom: none;
         }
-
-        &:hover {
-            background: #29292f;
-        }
     }
-
+    // Komórki tabeli
     .table-cell {
         padding: 12px 10px;
         height: 100%;
@@ -274,38 +291,36 @@
         align-items: center;
         gap: 8px;
         font-size: 0.85rem;
-        color: #c4c4cc;
+        color: var(--text-main);
         overflow: hidden;
-        border-right: 1px solid #303038;
+        border-right: 1px solid var(--border-color);
 
         &:last-child {
             border-right: none;
         }
 
-        // Numer zgłoszenia
         &--id {
             strong {
-                color: #00b37e;
+                color: var(--text-main);
                 font-size: 0.95rem;
                 white-space: nowrap;
             }
         }
 
-        // Urządzenie
         &--device {
             svg {
                 flex-shrink: 0;
-                color: #00b37e;
+                color: var(--text-muted);
             }
 
             span {
                 overflow: hidden;
                 text-overflow: ellipsis;
                 white-space: nowrap;
+                font-weight: 500;
             }
         }
 
-        // Opis usterki
         &--description {
             display: -webkit-box;
             -webkit-box-orient: vertical;
@@ -314,64 +329,63 @@
             overflow: hidden;
             overflow-wrap: anywhere;
             line-height: 1.4;
+            color: #4b5563;
         }
 
-        // Data i użytkownik
         &--date,
         &--user {
             white-space: nowrap;
-            font-size: 0.78rem;
+            font-size: 0.8rem;
+            color: #4b5563;
 
             svg {
                 flex-shrink: 0;
-                color: #8d8d99;
+                color: var(--text-muted);
             }
         }
     }
-
     // Statusy
     .status-badge {
         display: inline-flex;
         align-items: center;
         gap: 5px;
-        padding: 5px 9px;
+        padding: 5px 10px;
         border-radius: 20px;
-        font-size: 0.72rem;
-        font-weight: bold;
+        font-size: 0.75rem;
+        font-weight: 600;
         white-space: nowrap;
 
         &--success {
-            background: rgba(0, 179, 126, 0.15);
-            color: #00b37e;
+            background: #dcfce7;
+            color: #16a34a;
         }
 
         &--warning {
-            background: rgba(219, 145, 6, 0.15);
-            color: #fba919;
+            background: #fef3c7;
+            color: #d97706;
         }
 
         &--new {
-            background: rgba(59, 130, 246, 0.15);
-            color: #3b82f6;
+            background: #eff6ff;
+            color: #2563eb;
         }
     }
-
-    // Brak wyników
+    // Brak wyników w tabeli
     .no-reports {
         display: flex;
         flex-direction: column;
         align-items: center;
         justify-content: center;
         padding: 55px 20px;
-        color: #8d8d99;
+        color: var(--text-muted);
         text-align: center;
+        background-color: var(--bg-white);
 
         svg {
             margin-bottom: 12px;
-            color: #505059;
+            color: #d1d5db;
         }
     }
-
     // Paginacja
     .pagination {
         display: flex;
@@ -381,12 +395,13 @@
         gap: 15px;
         margin-top: 18px;
         padding: 15px 20px;
-        background: #202024;
-        border: 1px solid #323238;
-        border-radius: 8px;
+        background: var(--bg-white);
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.02);
 
         &__info {
-            color: #8d8d99;
+            color: var(--text-muted);
             font-size: 0.85rem;
         }
 
@@ -397,8 +412,9 @@
         }
 
         &__current {
-            color: #c4c4cc;
+            color: var(--text-main);
             font-size: 0.85rem;
+            font-weight: 500;
             white-space: nowrap;
         }
 
@@ -408,20 +424,22 @@
             gap: 5px;
             padding: 8px 12px;
             border-radius: 6px;
-            border: 1px solid #41414b;
-            background: #121214;
-            color: #e1e1e6;
+            border: 1px solid var(--border-color);
+            background: var(--bg-white);
+            color: var(--text-main);
+            font-weight: 500;
             cursor: pointer;
-            transition: 0.2s;
+            transition: all 0.2s;
 
             &:hover:not(:disabled) {
-                border-color: #00b37e;
-                color: #00b37e;
+                background: #f9fafb;
+                border-color: var(--border-hover);
             }
 
             &:disabled {
-                opacity: 0.35;
+                opacity: 0.4;
                 cursor: not-allowed;
+                background: #f3f4f6;
             }
         }
     }
