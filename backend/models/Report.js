@@ -17,23 +17,37 @@ module.exports = (sequelize, DataTypes) => {
             type: DataTypes.TEXT, 
             allowNull: false 
         },
-        status: { type: DataTypes.STRING(50), allowNull: false, defaultValue: 'Nowe' },
-        is_paused: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
-        paused_at: { type: DataTypes.DATE, allowNull: true },
-        pause_reason: { type: DataTypes.STRING(100), allowNull: true },
-        pause_note: { type: DataTypes.TEXT, allowNull: true },
+        status: { 
+            type: DataTypes.STRING(50), 
+            allowNull: false, 
+            defaultValue: 'Nowe' 
+        },
+        is_paused: { 
+            type: DataTypes.BOOLEAN, 
+            allowNull: false, 
+            defaultValue: 0
+        },
+        paused_at: { 
+            type: DataTypes.DATE, 
+            allowNull: true 
+        },
+        pause_reason: { 
+            type: DataTypes.STRING(100), 
+            allowNull: true 
+        },
+        pause_note: { 
+            type: DataTypes.TEXT, 
+            allowNull: true 
+        },
         created_at: { 
             type: DataTypes.DATE, 
-            defaultValue: DataTypes.NOW 
+            allowNull: false,
+            defaultValue: sequelize.literal('GETDATE()')
         }
     }, {
         tableName: 'reports',
         timestamps: false
     });
-
-    // Report.associate = (models) => {
-    //     Report.belongsTo(models.User, { foreignKey: 'user_id', as: 'user' });
-    // };
 
     return Report;
 };

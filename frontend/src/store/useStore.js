@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { getReports, getReportsByUserId } from '../services/reportsService';
+import { getReports, getReportsByUserId, createReport } from '../services/reportsService';
 
 const useStore = create((set) => ({
     user: JSON.parse(localStorage.getItem('user')) || null,
@@ -37,6 +37,17 @@ const useStore = create((set) => ({
             set({ reports });
         } catch (error) {
             console.error('Błąd pobierania zgłoszeń użytkownika:', error);
+        }
+    },
+
+    addNewReport: async (reportData) => {
+        try {
+            const newReport = await createReport(reportData);
+            set((state) => ({ reports: [newReport, ...state.reports] }));
+            return true;
+        } catch (error) {
+            console.error('Błąd podczas dodawania zgłoszenia:', error);
+            return false;
         }
     }
 }));

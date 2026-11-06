@@ -35,6 +35,25 @@ app.post('/login', async (req, res) => {
         res.status(500).json({ message: 'Server error' });
     }
 });
+
+app.post('/reports', async (req, res) => {
+    try {
+        const { user_id, device_name, issue_description } = req.body;
+        
+        const newReport = await Report.create({
+            user_id,
+            device_name,
+            issue_description,
+            status: 'Nowe'
+        });
+
+        res.status(201).json(newReport);
+    } catch (err) {
+        console.error('Błąd tworzenia zgłoszenia:', err);
+        res.status(500).json({ message: 'Błąd serwera podczas tworzenia zgłoszenia' });
+    }
+});
+
 app.get('/', (req, res) => {
     res.send('USWB działa');
 });

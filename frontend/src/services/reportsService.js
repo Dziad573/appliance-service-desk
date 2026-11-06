@@ -17,3 +17,8 @@ export async function getReportById(reportId) {
 
     return res.data;
 }
+
+export async function createReport(reportData) {
+    const res = await axios.post('http://localhost:3001/reports', reportData);
+    return res.data;
+}

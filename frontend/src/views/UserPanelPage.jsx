@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import useStore from '../store/useStore';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -7,13 +7,22 @@ import {
     Clock,
     AlertCircle,
     CheckCircle2,
-    Wrench
+    Wrench,
+    X,
+    Send
 } from 'lucide-react';
 import './UserPanelPage.scss';
 
 export const UserPanelPage = () => {
-    const { user, reports = [], fetchReportsByUserId } = useStore();
+    const { user, reports = [], fetchReportsByUserId, addNewReport } = useStore();
     const navigate = useNavigate();
+
+    // Stan modalu i formularza nowego zgłoszenia (wypełnianego przez klienta)
+    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [deviceName, setDeviceName] = useState('');
+    const [issueDescription, setIssueDescription] = useState('');
+    const [formError, setFormError] = useState('');
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     // Pobieranie zgłoszeń użytkownika przy wejściu na stronę
     useEffect(() => {
@@ -21,6 +30,36 @@ export const UserPanelPage = () => {
             fetchReportsByUserId(user.id);
         }
     }, [user, fetchReportsByUserId]);
+
+    // Obsługa wysyłania formularza przez klienta
+    const handleFormSubmit = async (e) => {
+        e.preventDefault();
+        if (!deviceName.trim() || !issueDescription.trim()) {
+            setFormError('Wypełnij nazwę urządzenia oraz opis usterki.');
+            return;
+        }
+
+        setIsSubmitting(true);
+        setFormError('');
+
+        // Wysyłamy dane dokładnie w strukturze oczekiwanej przez tabelę reports
+        const success = await addNewReport({
+            user_id: user.id,
+            device_name: deviceName,
+            issue_description: issueDescription,
+            status: 'Nowe' // Domyślny status dla klienta
+        });
+
+        setIsSubmitting(false);
+
+        if (success) {
+            setDeviceName('');
+            setIssueDescription('');
+            setIsModalOpen(false);
+        } else {
+            setFormError('Nie udało się dodać zgłoszenia. Spróbuj ponownie.');
+        }
+    };
 
     // Sortowanie (najnowsze na górze) i ucięcie do 5 ostatnich
     const recentReports = [...reports]
@@ -74,11 +113,14 @@ export const UserPanelPage = () => {
 
                     {/* Kafelki głównych akcji */}
                     <div className="dashboard-grid">
-                        <div className="dashboard-widget" onClick={() => navigate('/new-report')}>
+                        <div className="dashboard-widget" onClick={() => setIsModalOpen(true)}>
                             <div className="widget-icon blue">
                                 <PlusCircle size={28} />
                             </div>
-                            <h3>Nowe zlecenie</h3>
+                            {/* Kliknięcie w h3 uruchamia modal */}
+                            <h3 onClick={(e) => { e.stopPropagation(); setIsModalOpen(true); }}>
+                                Nowe zlecenie
+                            </h3>
                             <p>Zgłoś nowe urządzenie do naprawy</p>
                         </div>
 
@@ -93,7 +135,7 @@ export const UserPanelPage = () => {
 
                     {/* Sekcja z podglądem listy ostatnich zleceń */}
                     <div className="dashboard-main-section">
-                        <div className="placeholder-box large">
+                        <div className="placeholder-box">
                             <div className="box-header-row">
                                 <h3>Ostatnie zlecenia</h3>
                                 {recentReports.length > 0 && (
@@ -139,6 +181,63 @@ export const UserPanelPage = () => {
 
                 </div>
             </main>
+
+            {/* Formularz zgłoszeń*/}
+            {isModalOpen && (
+                <div className="modal-overlay" onClick={() => setIsModalOpen(false)}>
+                    <div className="modal-card" onClick={(e) => e.stopPropagation()}>
+                        <div className="modal-header">
+                            <h3>Nowe zgłoszenie serwisowe</h3>
+                            <button className="close-btn" onClick={() => setIsModalOpen(false)}>
+                                <X size={20} />
+                            </button>
+                        </div>
+
+                        <form onSubmit={handleFormSubmit}>
+                            <div className="form-group">
+                                <label>Nazwa urządzenia / Model *</label>
+                                <input
+                                    type="text"
+                                    placeholder="np. Pralka Bosch / Ekspres DeLonghi"
+                                    value={deviceName}
+                                    onChange={(e) => setDeviceName(e.target.value)}
+                                    required
+                                />
+                            </div>
+
+                            <div className="form-group">
+                                <label>Opis usterki / Problem *</label>
+                                <textarea
+                                    rows="4"
+                                    placeholder="Opisz co dokładnie się dzieje z urządzeniem..."
+                                    value={issueDescription}
+                                    onChange={(e) => setIssueDescription(e.target.value)}
+                                    required
+                                />
+                            </div>
+
+                            {formError && <p className="form-error">{formError}</p>}
+
+                            <div className="modal-actions">
+                                <button
+                                    type="button"
+                                    className="btn-secondary"
+                                    onClick={() => setIsModalOpen(false)}
+                                >
+                                    Anuluj
+                                </button>
+                                <button
+                                    type="submit"
+                                    className="btn-primary"
+                                    disabled={isSubmitting}
+                                >
+                                    <Send size={16} /> {isSubmitting ? 'Wysyłanie...' : 'Wyślij zgłoszenie'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };
