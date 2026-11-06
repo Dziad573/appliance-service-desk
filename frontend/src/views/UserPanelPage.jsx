@@ -118,7 +118,7 @@ export const UserPanelPage = () => {
 
                     {/* Nagłówek panelu */}
                     <header className="dashboard-header">
-                        <h2>Panel Użytkownika{user ? `: ${user.login}` : ''}</h2>
+                        <h2>Panel użytkownika</h2>
                         <p>Zarządzaj swoimi zleceniami i dodawaj nowe zgłoszenia serwisowe.</p>
                     </header>
 
