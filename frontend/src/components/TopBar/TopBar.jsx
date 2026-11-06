@@ -31,8 +31,17 @@ export const TopBar = () => {
                     </>
                 ) : (
                     <>
-                        <Link to="/user-panel" className="btn btn-register">Panel Użytkownika</Link>
-                        <button onClick={handleLogout} className="btn btn-login" style={{ marginLeft: '10px' }}>
+                        {user.role === 'user' && (
+                            <Link to="/user-panel" className="btn btn-register">
+                                Panel Użytkownika
+                            </Link>
+                        )}
+
+                        <button
+                            onClick={handleLogout}
+                            className="btn btn-login"
+                            style={{ marginLeft: '10px' }}
+                        >
                             Wyloguj
                         </button>
                     </>

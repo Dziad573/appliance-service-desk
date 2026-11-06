@@ -18,7 +18,11 @@ export const LoginPage = () => {
             setUser(userData);
             localStorage.setItem('user', JSON.stringify(userData));
             setError('');
-            navigate('/');
+            navigate(
+                userData.role === 'admin'
+                    ? '/reports'
+                    : '/user-panel'
+            );
         } catch (err) {
             console.log(loginInput, password);
             setError('Nieprawidłowy login lub hasło.');
