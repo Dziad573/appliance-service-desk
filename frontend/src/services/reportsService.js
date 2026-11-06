@@ -22,3 +22,9 @@ export async function createReport(reportData) {
     const res = await axios.post('http://localhost:3001/reports', reportData);
     return res.data;
 }
+export async function updateServiceNote(reportId, field, value, userId) {
+    const res = await axios.patch(`http://localhost:3001/reports/${reportId}/service-notes`, {
+        field, value, user_id: userId
+    });
+    return res.data;
+}

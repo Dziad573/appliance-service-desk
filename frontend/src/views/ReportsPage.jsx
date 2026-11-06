@@ -13,7 +13,8 @@ import {
     ChevronRight,
     ArrowUpDown,
     ArrowUp,
-    ArrowDown
+    ArrowDown,
+    ClipboardList
 } from 'lucide-react';
 
 import './home.scss';
@@ -243,31 +244,30 @@ export const ReportsPage = () => {
 
     // Status reklamacji
     const getStatusBadge = (status) => {
-        switch (status?.toLowerCase()) {
-            case 'zakończone':
-                return (
-                    <span className="status-badge status-badge--success">
-                        <CheckCircle2 size={14} />
-                        Zakończone
-                    </span>
-                );
+        const normalized = (status || 'Nowe').toLocaleLowerCase('pl-PL');
+        const statusStyles = {
+            'nowe': 'new',
+            'przyjęte do realizacji': 'accepted',
+            'diagnoza': 'diagnosis',
+            'w naprawie': 'repair',
+            'testy / kontrola jakości': 'testing',
+            'gotowe do odbioru / wysyłki': 'ready',
+            'zakończone': 'success',
+            'zakończona': 'success',
+            'odrzucone': 'rejected',
+            'anulowane': 'cancelled'
+        };
+        const tone = statusStyles[normalized] || 'new';
+        const Icon = ['success', 'ready'].includes(tone) ? CheckCircle2
+            : ['accepted', 'diagnosis', 'repair', 'testing'].includes(tone) ? Wrench
+            : tone === 'cancelled' || tone === 'rejected' ? AlertCircle : AlertCircle;
 
-            case 'w trakcie':
-                return (
-                    <span className="status-badge status-badge--warning">
-                        <Clock size={14} />
-                        W trakcie
-                    </span>
-                );
-
-            default:
-                return (
-                    <span className="status-badge status-badge--new">
-                        <AlertCircle size={14} />
-                        {status || 'Nowe'}
-                    </span>
-                );
-        }
+        return (
+            <span className={`status-badge status-badge--${tone}`}>
+                <Icon size={14} />
+                {status || 'Nowe'}
+            </span>
+        );
     };
 
     // Nagłówek sortowalnej kolumny
@@ -297,15 +297,20 @@ export const ReportsPage = () => {
 
             <section className="hero">
                 <div className="hero__overlay">
-                    <h1 className="hero__title">
-                        {isAdmin ? 'Panel reklamacji' : 'Moje reklamacje'}
-                    </h1>
+                    <div className="hero__icon" aria-hidden="true">
+                        <ClipboardList size={27} strokeWidth={2} />
+                    </div>
+                    <div className="hero__copy">
+                        <h1 className="hero__title">
+                            {isAdmin ? 'Panel reklamacji' : 'Moje reklamacje'}
+                        </h1>
 
-                    <p className="hero__subtitle">
-                        {isAdmin
-                            ? 'Zarządzanie zgłoszeniami reklamacyjnymi'
-                            : 'Lista Twoich zgłoszeń reklamacyjnych'}
-                    </p>
+                        <p className="hero__subtitle">
+                            {isAdmin
+                                ? 'Zarządzanie zgłoszeniami reklamacyjnymi'
+                                : 'Lista Twoich zgłoszeń reklamacyjnych'}
+                        </p>
+                    </div>
                 </div>
             </section>
 

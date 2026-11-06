@@ -1,8 +1,8 @@
 :root {
     --bg-gray: #f3f4f6; /* Jasnoszare tło strony (aby biała karta była widoczna) */
     --bg-white: #ffffff; /* Czysta biel dla karty logowania */
-    --prz-blue: #003b7e; /* Główny niebieski akcent */
-    --prz-blue-hover: #002855;
+    --prz-blue: #0176d3; /* Główny niebieski akcent */
+    --prz-blue-hover: #005fb2;
     --text-main: #1f2937;
     --text-muted: #9ca3af;
     --border-color: #d1d5db;
@@ -58,7 +58,7 @@
         &:focus {
             border-color: var(--prz-blue);
             background-color: var(--bg-white);
-            box-shadow: 0 0 0 3px rgba(0, 59, 126, 0.1);
+            box-shadow: 0 0 0 3px rgba(1, 118, 211, 0.1);
             outline: none;
         }
     }
@@ -104,4 +104,20 @@
     left: 1rem;
     color: var(--text-muted);
     pointer-events: none; /* Pozwala kliknąć "przez" ikonę w pole tekstowe */
+}
+
+.login-card__register {
+    margin: -0.35rem 0 0;
+    text-align: center;
+    color: #64748b;
+    font-size: 0.85rem;
+
+    a {
+        color: #0176d3;
+        font-weight: 650;
+        text-decoration: underline;
+        text-underline-offset: 2px;
+
+        &:hover { color: #005fb2; }
+    }
 }

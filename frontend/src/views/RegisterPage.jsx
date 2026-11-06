@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { User, Lock } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import './RegisterPage.scss';
 
 export const RegisterPage = () => {
@@ -74,6 +75,9 @@ export const RegisterPage = () => {
                 <button type="submit" className="register-card__button">
                     Zarejestruj
                 </button>
+                <p className="register-card__login">
+                    Masz już konto? <Link to="/login">Zaloguj się</Link>.
+                </p>
             </form>
         </div>
     );

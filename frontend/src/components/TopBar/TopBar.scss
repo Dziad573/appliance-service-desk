@@ -207,3 +207,122 @@
         }
     }
 }
+
+/* CRM / Salesforce-inspired header */
+.topbar-prz {
+    height: 72px;
+    padding: 0 clamp(20px, 3vw, 48px);
+    background: #ffffff;
+    border-bottom: 1px solid #d8e5f5;
+    box-shadow: 0 2px 8px rgba(20, 55, 95, 0.07);
+    color: #16325c;
+
+    &__logo {
+        .text-logo {
+            display: inline-flex;
+            align-items: center;
+            gap: 11px;
+            color: #16325c;
+            font-size: 1.35rem;
+            font-weight: 750;
+            letter-spacing: -0.35px;
+
+            &:hover {
+                color: #0176d3;
+                opacity: 1;
+            }
+
+            &__icon {
+                color: #0176d3;
+                fill: #e8f3ff;
+                flex: 0 0 auto;
+            }
+        }
+    }
+
+    &__actions {
+        gap: 10px;
+
+        .btn {
+            min-height: 40px;
+            padding: 0 17px;
+            border-radius: 7px;
+            font-size: 0.9rem;
+            font-weight: 650;
+            gap: 8px;
+        }
+
+        .btn-login {
+            background: #ffffff;
+            color: #24527f;
+            border: 1px solid #b8cce2;
+
+            &:hover {
+                background: #f1f7fd;
+                border-color: #0176d3;
+                color: #0176d3;
+            }
+        }
+
+        .btn-register {
+            background: #0176d3;
+            color: #ffffff;
+            border: 1px solid #0176d3;
+
+            &:hover {
+                background: #005fb2;
+                border-color: #005fb2;
+            }
+        }
+    }
+}
+
+@media (max-width: 600px) {
+    .topbar-prz {
+        height: 64px;
+        padding: 0 14px;
+
+        &__logo .text-logo {
+            font-size: 1.08rem;
+            gap: 7px;
+        }
+
+        &__logo .text-logo__icon {
+            width: 26px;
+            height: 26px;
+        }
+
+        &__actions .btn {
+            min-height: 36px;
+            padding: 0 11px;
+            font-size: 0.82rem;
+        }
+    }
+}
+
+/* Spójny wygląd nagłówka CRM */
+.topbar-prz__logo .text-logo { gap: 0; }
+
+.topbar-prz__user {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    color: #24527f;
+    font-size: 0.9rem;
+    font-weight: 650;
+    padding: 0 8px;
+    white-space: nowrap;
+}
+
+.topbar-prz__actions .btn-user-panel {
+    min-height: 40px;
+    padding: 0 16px;
+    background: #fff;
+    color: #0176d3;
+    border: 1px solid #b8cce2;
+    border-radius: 7px;
+    font-weight: 650;
+    text-decoration: none;
+
+    &:hover { background: #f1f7fd; border-color: #0176d3; color: #005fb2; }
+}

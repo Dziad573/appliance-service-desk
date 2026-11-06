@@ -15,42 +15,65 @@
     flex-direction: column;
 
     .hero {
-        position: relative;
-        height: 20vh;
-        min-height: 200px;
-        overflow: hidden;
+        min-height: 142px;
+        padding: 24px 20px;
+        display: flex;
+        align-items: center;
+        background:
+            radial-gradient(ellipse at 88% 0%, rgba(1, 118, 211, 0.10), transparent 42%),
+            linear-gradient(105deg, #f4f8fd 0%, #edf5fd 100%);
+        border-bottom: 1px solid #e0eaf5;
 
         &__overlay {
-            position: absolute;
-            inset: 0;
-            background-color: var(--prz-blue); /* Użycie ciemnoniebieskiego z paska */
-            color: white;
+            width: 100%;
+            max-width: 1400px;
+            margin: 0 auto;
             display: flex;
-            flex-direction: column;
-            justify-content: center;
+            flex-direction: row;
             align-items: center;
-            text-align: center;
-            padding: 2rem;
-            /* Subtelny gradient, żeby nagłówek nie był płaski */
-            background: linear-gradient(135deg, var(--prz-blue) 0%, #0052a5 100%);
+            justify-content: flex-start;
+            gap: 18px;
+            color: #16325c;
+            text-align: left;
+        }
+
+        &__icon {
+            width: 58px;
+            height: 58px;
+            flex: 0 0 58px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 13px;
+            color: #0176d3;
+            background: linear-gradient(145deg, #e5f2ff, #d5eaff);
+            border: 1px solid #d4e8fb;
+        }
+
+        &__copy {
+            min-width: 0;
         }
 
         &__title {
-            font-size: 2.5rem;
             margin: 0;
-            font-weight: 700;
+            color: #16325c;
+            font-size: 2rem;
+            line-height: 1.2;
+            font-weight: 750;
+            letter-spacing: -0.5px;
         }
 
         &__subtitle {
-            font-size: 1.1rem;
-            margin-top: 0.75rem;
-            opacity: 0.9;
+            margin: 7px 0 0;
+            color: #526b89;
+            font-size: 1rem;
+            line-height: 1.45;
         }
     }
 }
 
 .reports-page-container {
-    background-color: var(--bg-gray);
+    background-color: #f4f7fb;
     color: var(--text-main);
     min-height: 100vh;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -59,7 +82,7 @@
         display: flex;
         gap: 20px;
         max-width: 1400px;
-        margin: -30px auto 20px;
+        margin: 20px auto 22px;
         padding: 0 20px;
         position: relative;
         z-index: 10;
@@ -117,19 +140,19 @@
         .clear-filters {
             background: var(--bg-white);
             border: 1px solid var(--border-color);
-            border-radius: 6px;
-            color: var(--text-main);
+            border-radius: 7px;
+            color: #24527f;
             padding: 9px 15px;
             font-weight: 600;
             cursor: pointer;
             white-space: nowrap;
             transition: all 0.2s ease;
-            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+            box-shadow: 0 1px 2px rgba(20,55,95,0.05);
 
             &:hover {
-                background: #f9fafb;
-                border-color: var(--border-hover);
-                color: var(--primary-color);
+                background: #f1f7fd;
+                border-color: #91bde5;
+                color: #0176d3;
             }
         }
     }
@@ -369,6 +392,41 @@
             background: #eff6ff;
             color: #2563eb;
         }
+
+        &--accepted {
+            background: #e0f2fe;
+            color: #0369a1;
+        }
+
+        &--diagnosis {
+            background: #f3e8ff;
+            color: #7e22ce;
+        }
+
+        &--repair {
+            background: #ffedd5;
+            color: #c2410c;
+        }
+
+        &--testing {
+            background: #fef9c3;
+            color: #a16207;
+        }
+
+        &--ready {
+            background: #ccfbf1;
+            color: #0f766e;
+        }
+
+        &--rejected {
+            background: #ffe4e6;
+            color: #be123c;
+        }
+
+        &--cancelled {
+            background: #e5e7eb;
+            color: #4b5563;
+        }
     }
     // Brak wyników w tabeli
     .no-reports {
@@ -448,12 +506,23 @@
 // Responsywność
 @media (max-width: 700px) {
     .reports-page {
+        .hero {
+            min-height: 118px;
+            padding: 20px 16px;
+        }
+
+        .hero__icon {
+            width: 48px;
+            height: 48px;
+            flex-basis: 48px;
+        }
+
         .hero__title {
-            font-size: 1.8rem;
+            font-size: 1.45rem;
         }
 
         .hero__subtitle {
-            font-size: 1rem;
+            font-size: 0.9rem;
         }
     }
 

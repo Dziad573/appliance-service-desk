@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import useStore from '../store/useStore';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { Mail, Lock } from 'lucide-react';
 import './LoginPage.scss';
 import { login } from '../services/loginService';
@@ -61,6 +61,9 @@ export const LoginPage = () => {
                 <button className="login-card__button" onClick={handleLogin}>
                     Zaloguj
                 </button>
+                <p className="login-card__register">
+                    Nie masz jeszcze konta? <Link to="/register">Zarejestruj się</Link>.
+                </p>
             </div>
         </div>
     );

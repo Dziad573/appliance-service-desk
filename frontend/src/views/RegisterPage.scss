@@ -1,8 +1,8 @@
 :root {
     --bg-gray: #f3f4f6;
     --bg-white: #ffffff;
-    --prz-blue: #003b7e;
-    --prz-blue-hover: #002855;
+    --prz-blue: #0176d3;
+    --prz-blue-hover: #005fb2;
     --text-main: #1f2937;
     --text-muted: #9ca3af;
     --border-color: #d1d5db;
@@ -71,7 +71,7 @@
         &:focus {
             border-color: var(--prz-blue);
             background-color: var(--bg-white);
-            box-shadow: 0 0 0 3px rgba(0, 59, 126, 0.1);
+            box-shadow: 0 0 0 3px rgba(1, 118, 211, 0.1);
         }
     }
 
@@ -103,5 +103,27 @@
         &:active {
             transform: translateY(1px);
         }
+    }
+}
+
+.register-card__button {
+    background-color: #0176d3;
+
+    &:hover { background-color: #005fb2; }
+}
+
+.register-card__login {
+    margin: -0.35rem 0 0;
+    text-align: center;
+    color: #64748b;
+    font-size: 0.85rem;
+
+    a {
+        color: #0176d3;
+        font-weight: 650;
+        text-decoration: underline;
+        text-underline-offset: 2px;
+
+        &:hover { color: #005fb2; }
     }
 }

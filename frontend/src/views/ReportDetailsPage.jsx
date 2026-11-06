@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 
 import useStore from '../store/useStore';
-import { getReportById } from '../services/reportsService';
+import { getReportById, updateServiceNote } from '../services/reportsService';
 import { getComments, addComment } from '../services/commentsService';
 import { updateReportStatus, pauseReport, resumeReport, getReportStatusHistory } from '../services/reportStatusService';
 
@@ -43,6 +43,11 @@ export const ReportDetailsPage = () => {
     const [statusHistory, setStatusHistory] = useState([]);
     const [statusBusy, setStatusBusy] = useState(false);
     const [statusError, setStatusError] = useState('');
+    const [diagnosisDraft, setDiagnosisDraft] = useState('');
+    const [repairResultDraft, setRepairResultDraft] = useState('');
+    const [serviceNoteBusy, setServiceNoteBusy] = useState(false);
+    const [serviceNoteError, setServiceNoteError] = useState('');
+    const [serviceNoteSuccess, setServiceNoteSuccess] = useState('');
     const [showPauseForm, setShowPauseForm] = useState(false);
     const [pauseReason, setPauseReason] = useState('');
     const [pauseNote, setPauseNote] = useState('');
@@ -69,6 +74,8 @@ export const ReportDetailsPage = () => {
                 }
 
                 setReport(data);
+                setDiagnosisDraft(data.diagnosis_description || '');
+                setRepairResultDraft(data.repair_result || '');
 
             } catch (err) {
                 if (!cancelled) {
@@ -113,7 +120,7 @@ export const ReportDetailsPage = () => {
 
     // Pobieranie komentarzy dla aktualnie otwartej reklamacji
     useEffect(() => {
-        if (!report?.id) return;
+        if (!isAdmin || !report?.id) return;
 
         let cancelled = false;
         const fetchComments = async () => {
@@ -133,7 +140,7 @@ export const ReportDetailsPage = () => {
 
         fetchComments();
         return () => { cancelled = true; };
-    }, [report?.id]);
+    }, [report?.id, isAdmin]);
 
     const processStatuses = [
         'Nowe',
@@ -186,6 +193,25 @@ export const ReportDetailsPage = () => {
         finally { setStatusBusy(false); }
     };
 
+    const saveServiceNote = async (field) => {
+        if (!isAdmin || !report?.id || serviceNoteBusy) return;
+        const value = field === 'diagnosis_description' ? diagnosisDraft : repairResultDraft;
+        try {
+            setServiceNoteBusy(true);
+            setServiceNoteError('');
+            setServiceNoteSuccess('');
+            const updated = await updateServiceNote(report.id, field, value, user?.id);
+            setReport(updated);
+            setDiagnosisDraft(updated.diagnosis_description || '');
+            setRepairResultDraft(updated.repair_result || '');
+            setServiceNoteSuccess('Zapisano zmiany.');
+        } catch (err) {
+            setServiceNoteError(err.response?.data?.message || 'Nie udało się zapisać danych serwisowych.');
+        } finally {
+            setServiceNoteBusy(false);
+        }
+    };
+
     const currentStatusIndex = processStatuses.indexOf(report?.status);
     const isTerminal = terminalStatuses.includes(report?.status);
     const canCancel = report?.status === 'Nowe';
@@ -194,6 +220,10 @@ export const ReportDetailsPage = () => {
     const nextProcessStatus = currentStatusIndex >= 0
         ? processStatuses[currentStatusIndex + 1]
         : null;
+    const canEditDiagnosis = isAdmin && report?.status === 'Diagnoza';
+    const canEditRepairResult = isAdmin && report?.status === 'Testy / kontrola jakości';
+    const reachedQualityControl = currentStatusIndex >= 4 || statusHistory.some(item => item.new_status === 'Testy / kontrola jakości' || item.old_status === 'Testy / kontrola jakości' || item.new_status === 'Gotowe do odbioru / wysyłki' || item.old_status === 'Gotowe do odbioru / wysyłki');
+    const showRepairResult = reachedQualityControl || Boolean(report?.repair_result);
 
     // Po dodaniu komentarza przewiń listę do najnowszej wiadomości
     useEffect(() => {
@@ -205,7 +235,7 @@ export const ReportDetailsPage = () => {
     const submitComment = async (event) => {
         event.preventDefault();
         const content = commentText.trim();
-        if (!content || !user?.id || !report?.id || sendingComment) return;
+        if (!isAdmin || !content || !user?.id || !report?.id || sendingComment) return;
 
         try {
             setSendingComment(true);
@@ -320,6 +350,28 @@ export const ReportDetailsPage = () => {
                             <div className="report-status-history"><strong>Historia statusów</strong>{statusHistory.length === 0 ? <p>Brak zapisanych zmian.</p> : statusHistory.map(item => <div className="report-status-history__item" key={item.id}><span>{formatDate(item.created_at)} · {item.changedBy?.login || (item.changed_by ? `Użytkownik #${item.changed_by}` : 'System')}</span><strong>{item.action === 'pause' ? `Wstrzymano: ${item.reason}` : item.action === 'resume' ? 'Wznowiono reklamację' : `${item.old_status || '—'} → ${item.new_status}`}</strong>{item.note && <small>{item.note}</small>}</div>)}</div>
                         </section>
 
+                        {/* Edycja danych serwisowych dostępna tylko na właściwym etapie */}
+                        {isAdmin && (canEditDiagnosis || canEditRepairResult) && (
+                            <section className="details-card service-notes-editor">
+                                <div className="details-card__header">
+                                    <div className="details-card__icon"><Wrench size={19} /></div>
+                                    <div><h2>Dane serwisowe do uzupełnienia</h2><p>Pola dostępne do edycji na bieżącym etapie reklamacji</p></div>
+                                </div>
+                                {canEditDiagnosis && <div className="service-note-edit-field">
+                                    <label htmlFor="diagnosis-description">Opis diagnozy</label>
+                                    <textarea id="diagnosis-description" rows={4} value={diagnosisDraft} onChange={e => setDiagnosisDraft(e.target.value)} placeholder="Opisz przeprowadzoną diagnozę, wykryte przyczyny i ustalenia technika..." />
+                                    <button type="button" className="report-action-button report-action-button--primary" disabled={serviceNoteBusy} onClick={() => saveServiceNote('diagnosis_description')}>{serviceNoteBusy ? 'Zapisywanie...' : 'Zapisz opis diagnozy'}</button>
+                                </div>}
+                                {canEditRepairResult && <div className="service-note-edit-field">
+                                    <label htmlFor="repair-result">Rezultat naprawy</label>
+                                    <textarea id="repair-result" rows={4} value={repairResultDraft} onChange={e => setRepairResultDraft(e.target.value)} placeholder="Opisz wykonane czynności i rezultat naprawy..." />
+                                    <button type="button" className="report-action-button report-action-button--primary" disabled={serviceNoteBusy} onClick={() => saveServiceNote('repair_result')}>{serviceNoteBusy ? 'Zapisywanie...' : 'Zapisz rezultat naprawy'}</button>
+                                </div>}
+                                {serviceNoteError && <p className="service-note-message service-note-message--error">{serviceNoteError}</p>}
+                                {serviceNoteSuccess && <p className="service-note-message service-note-message--success">{serviceNoteSuccess}</p>}
+                            </section>
+                        )}
+
                         {/* Zawartość strony */}
                         <div className="report-details-layout">
 
@@ -380,6 +432,30 @@ export const ReportDetailsPage = () => {
                                     </div>
                                 </section>
 
+                                {isAdmin && (
+                                    <section className="details-card">
+                                        <div className="details-card__header"><div className="details-card__icon"><User size={19} /></div><div><h2>Dane zgłaszającego</h2><p>Dane kontaktowe przekazane w formularzu</p></div></div>
+                                        <div className="details-fields">
+                                            <div className="details-field"><span>Imię i nazwisko</span><strong>{report.customer_name || 'Brak danych'}</strong></div>
+                                            <div className="details-field"><span>Adres e-mail</span><strong>{report.customer_email || 'Brak danych'}</strong></div>
+                                            <div className="details-field"><span>Telefon</span><strong>{report.customer_phone || 'Brak danych'}</strong></div>
+                                            <div className="details-field"><span>Kraj</span><strong>{report.customer_country || 'Brak danych'}</strong></div>
+                                            <div className="details-field"><span>Język kontaktu</span><strong>{report.customer_language || 'Brak danych'}</strong></div>
+                                        </div>
+                                    </section>
+                                )}
+
+                                <section className="details-card">
+                                    <div className="details-card__header"><div className="details-card__icon"><Wrench size={19} /></div><div><h2>Dane urządzenia</h2><p>Informacje identyfikujące produkt</p></div></div>
+                                    <div className="details-fields">
+                                        <div className="details-field"><span>Producent</span><strong>{report.manufacturer || 'Brak danych'}</strong></div>
+                                        <div className="details-field"><span>Model produktu</span><strong>{report.product_model || report.device_name || 'Brak danych'}</strong></div>
+                                        <div className="details-field"><span>Numer seryjny</span><strong>{report.serial_number_unavailable ? 'Nie podano / niedostępny' : (report.serial_number || 'Brak danych')}</strong></div>
+                                        <div className="details-field"><span>Data zakupu</span><strong>{report.purchase_date ? new Date(report.purchase_date).toLocaleDateString('pl-PL') : 'Brak danych'}</strong></div>
+                                        <div className="details-field"><span>Typ reklamacji</span><strong>{report.complaint_type || 'Brak danych'}</strong></div>
+                                    </div>
+                                </section>
+
                                 {/* Opis usterki */}
                                 <section className="details-card">
 
@@ -398,6 +474,15 @@ export const ReportDetailsPage = () => {
                                         {report.issue_description || 'Brak opisu usterki.'}
                                     </div>
 
+                                </section>
+
+                                {/* Informacyjne dane serwisowe: diagnoza zawsze, rezultat od etapu testów */}
+                                <section className="details-card service-notes-card">
+                                    <div className="details-card__header"><div className="details-card__icon"><Wrench size={19} /></div><div><h2>Dane serwisowe</h2><p>Informacje uzupełniane przez technika</p></div></div>
+                                    <div className="service-note-readonly">
+                                        <div className="service-note-readonly__item"><span>Opis diagnozy</span><p>{report.diagnosis_description || 'Diagnoza nie została jeszcze uzupełniona.'}</p></div>
+                                        {showRepairResult && <div className="service-note-readonly__item"><span>Rezultat naprawy</span><p>{report.repair_result || 'Rezultat naprawy nie został jeszcze uzupełniony.'}</p></div>}
+                                    </div>
                                 </section>
 
                             </main>
@@ -437,8 +522,8 @@ export const ReportDetailsPage = () => {
 
                                 </section>
 
-                                {/* Komunikator komentarzy */}
-                                <section className="details-card comments-card">
+                                {/* Komentarze są dostępne wyłącznie dla administratora */}
+                                {isAdmin && <section className="details-card comments-card">
                                     <div className="details-card__header">
                                         <div className="details-card__icon">
                                             <MessageCircle size={19} />
@@ -513,7 +598,7 @@ export const ReportDetailsPage = () => {
                                             <Send size={17} />
                                         </button>
                                     </form>
-                                </section>
+                                </section>}
 
                             </aside>
 

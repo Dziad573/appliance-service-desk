@@ -38,12 +38,41 @@ app.post('/login', async (req, res) => {
 
 app.post('/reports', async (req, res) => {
     try {
-        const { user_id, device_name, issue_description } = req.body;
-        
+        const {
+            user_id,
+            customer_name,
+            customer_email,
+            customer_phone,
+            customer_country,
+            customer_language,
+            serial_number,
+            serial_number_unavailable = false,
+            manufacturer,
+            product_model,
+            purchase_date,
+            issue_description,
+            complaint_type
+        } = req.body;
+
+        // Formularz przesyła product_model; device_name pozostaje wymaganym
+        // polem starszych widoków i kolumną NOT NULL w tabeli reports.
+        const device_name = product_model || req.body.device_name;
+
         const newReport = await Report.create({
             user_id,
             device_name,
+            customer_name,
+            customer_email,
+            customer_phone,
+            customer_country,
+            customer_language,
+            serial_number: serial_number_unavailable ? null : serial_number,
+            serial_number_unavailable,
+            manufacturer,
+            product_model,
+            purchase_date,
             issue_description,
+            complaint_type,
             status: 'Nowe'
         });
 
@@ -213,6 +242,42 @@ app.patch('/reports/:reportId/status', async (req, res) => {
     }
 });
 
+// Dane serwisowe: edycja wyłącznie przez administratora i na właściwym etapie.
+app.patch('/reports/:reportId/service-notes', async (req, res) => {
+    try {
+        const reportId = Number(req.params.reportId);
+        const userId = Number(req.body.user_id);
+        const field = req.body.field;
+        const value = typeof req.body.value === 'string' ? req.body.value.trim() : '';
+
+        if (!Number.isInteger(reportId) || reportId <= 0 || !Number.isInteger(userId) || userId <= 0 || !['diagnosis_description', 'repair_result'].includes(field)) {
+            return res.status(400).json({ message: 'Nieprawidłowe dane zapisu' });
+        }
+
+        const editor = await User.findByPk(userId);
+        if (!editor || editor.role !== 'admin') {
+            return res.status(403).json({ message: 'Tylko administrator może uzupełniać dane serwisowe.' });
+        }
+
+        const report = await Report.findByPk(reportId);
+        if (!report) return res.status(404).json({ message: 'Nie znaleziono reklamacji' });
+
+        if (field === 'diagnosis_description' && report.status !== 'Diagnoza') {
+            return res.status(409).json({ message: 'Opis diagnozy można edytować wyłącznie w statusie Diagnoza.' });
+        }
+        if (field === 'repair_result' && report.status !== 'Testy / kontrola jakości') {
+            return res.status(409).json({ message: 'Rezultat naprawy można edytować wyłącznie w statusie Testy / kontrola jakości.' });
+        }
+
+        report[field] = value || null;
+        await report.save();
+        return res.json(report);
+    } catch (err) {
+        console.error('Błąd zapisu danych serwisowych:', err);
+        return res.status(500).json({ message: 'Nie udało się zapisać danych serwisowych.' });
+    }
+});
+
 app.post('/reports/:reportId/pause', async (req, res) => {
     try {
         const reportId = Number(req.params.reportId);
@@ -319,6 +384,9 @@ app.post('/reports/:reportId/comments', async (req, res) => {
         const author = await User.findByPk(userId);
         if (!author) {
             return res.status(404).json({ message: 'Nie znaleziono użytkownika' });
+        }
+        if (author.role !== 'admin') {
+            return res.status(403).json({ message: 'Komentarze są dostępne wyłącznie dla administratorów.' });
         }
 
         if (parentCommentId !== null) {

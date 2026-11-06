@@ -19,8 +19,15 @@ export const UserPanelPage = () => {
 
     // Stan modalu i formularza nowego zgłoszenia (wypełnianego przez klienta)
     const [isModalOpen, setIsModalOpen] = useState(false);
-    const [deviceName, setDeviceName] = useState('');
-    const [issueDescription, setIssueDescription] = useState('');
+    const emptyForm = {
+        customer_name: '', customer_email: '', customer_phone: '',
+        customer_country: 'Polska', customer_language: 'Polski',
+        serial_number: '', serial_number_unavailable: false,
+        manufacturer: '', product_model: '', purchase_date: '',
+        issue_description: '', complaint_type: 'Gwarancyjna'
+    };
+    const [form, setForm] = useState(emptyForm);
+    const updateField = (name, value) => setForm(current => ({ ...current, [name]: value }));
     const [formError, setFormError] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -34,27 +41,28 @@ export const UserPanelPage = () => {
     // Obsługa wysyłania formularza przez klienta
     const handleFormSubmit = async (e) => {
         e.preventDefault();
-        if (!deviceName.trim() || !issueDescription.trim()) {
-            setFormError('Wypełnij nazwę urządzenia oraz opis usterki.');
+        const required = ['customer_name', 'customer_email', 'customer_phone', 'customer_country',
+            'customer_language', 'manufacturer', 'product_model', 'purchase_date',
+            'issue_description', 'complaint_type'];
+        if (required.some(key => !String(form[key] || '').trim()) ||
+            (!form.serial_number_unavailable && !form.serial_number.trim())) {
+            setFormError('Uzupełnij wymagane pola. Podaj numer seryjny lub zaznacz jego brak.');
             return;
         }
 
         setIsSubmitting(true);
         setFormError('');
 
-        // Wysyłamy dane dokładnie w strukturze oczekiwanej przez tabelę reports
         const success = await addNewReport({
             user_id: user.id,
-            device_name: deviceName,
-            issue_description: issueDescription,
-            status: 'Nowe' // Domyślny status dla klienta
+            ...form,
+            status: 'Nowe'
         });
 
         setIsSubmitting(false);
 
         if (success) {
-            setDeviceName('');
-            setIssueDescription('');
+            setForm(emptyForm);
             setIsModalOpen(false);
         } else {
             setFormError('Nie udało się dodać zgłoszenia. Spróbuj ponownie.');
@@ -78,26 +86,29 @@ export const UserPanelPage = () => {
 
     // Funkcja generująca odznakę statusu
     const getStatusBadge = (status) => {
-        switch (status?.toLowerCase()) {
-            case 'zakończone':
-                return (
-                    <span className="badge badge--success">
-                        <CheckCircle2 size={14} /> Zakończone
-                    </span>
-                );
-            case 'w trakcie':
-                return (
-                    <span className="badge badge--warning">
-                        <Clock size={14} /> W trakcie
-                    </span>
-                );
-            default:
-                return (
-                    <span className="badge badge--new">
-                        <AlertCircle size={14} /> {status || 'Nowe'}
-                    </span>
-                );
-        }
+        const normalized = (status || 'Nowe').toLocaleLowerCase('pl-PL');
+        const statusStyles = {
+            'nowe': 'new',
+            'przyjęte do realizacji': 'accepted',
+            'diagnoza': 'diagnosis',
+            'w naprawie': 'repair',
+            'testy / kontrola jakości': 'testing',
+            'gotowe do odbioru / wysyłki': 'ready',
+            'zakończone': 'success',
+            'zakończona': 'success',
+            'odrzucone': 'rejected',
+            'anulowane': 'cancelled'
+        };
+        const tone = statusStyles[normalized] || 'new';
+        const Icon = ['success', 'ready'].includes(tone) ? CheckCircle2
+            : ['accepted', 'diagnosis', 'repair', 'testing'].includes(tone) ? Wrench
+            : AlertCircle;
+
+        return (
+            <span className={`badge badge--${tone}`}>
+                <Icon size={14} /> {status || 'Nowe'}
+            </span>
+        );
     };
 
     return (
@@ -193,46 +204,43 @@ export const UserPanelPage = () => {
                             </button>
                         </div>
 
-                        <form onSubmit={handleFormSubmit}>
-                            <div className="form-group">
-                                <label>Nazwa urządzenia / Model *</label>
-                                <input
-                                    type="text"
-                                    placeholder="np. Pralka Bosch / Ekspres DeLonghi"
-                                    value={deviceName}
-                                    onChange={(e) => setDeviceName(e.target.value)}
-                                    required
-                                />
-                            </div>
+                        <form onSubmit={handleFormSubmit} className="new-report-form">
+                            <div className="form-sections">
+                                <section className="form-section">
+                                    <h4>Dane zgłaszającego</h4>
+                                    <div className="form-fields">
+                                        <div className="form-group"><label>Imię i nazwisko *</label><input value={form.customer_name} onChange={e => updateField('customer_name', e.target.value)} required autoComplete="name" /></div>
+                                        <div className="form-group"><label>Adres e-mail *</label><input type="email" value={form.customer_email} onChange={e => updateField('customer_email', e.target.value)} required autoComplete="email" /></div>
+                                        <div className="form-group"><label>Numer telefonu *</label><input type="tel" value={form.customer_phone} onChange={e => updateField('customer_phone', e.target.value)} required autoComplete="tel" /></div>
+                                        <div className="form-group"><label>Kraj *</label><select value={form.customer_country} onChange={e => updateField('customer_country', e.target.value)} required><option>Polska</option><option>Niemcy</option><option>Czechy</option><option>Słowacja</option><option>Ukraina</option><option>Wielka Brytania</option><option>Inny</option></select></div>
+                                        <div className="form-group"><label>Język kontaktu *</label><select value={form.customer_language} onChange={e => updateField('customer_language', e.target.value)} required><option>Polski</option><option>Angielski</option><option>Niemiecki</option><option>Czeski</option><option>Słowacki</option><option>Ukraiński</option></select></div>
+                                    </div>
+                                </section>
 
-                            <div className="form-group">
-                                <label>Opis usterki / Problem *</label>
-                                <textarea
-                                    rows="4"
-                                    placeholder="Opisz co dokładnie się dzieje z urządzeniem..."
-                                    value={issueDescription}
-                                    onChange={(e) => setIssueDescription(e.target.value)}
-                                    required
-                                />
+                                <section className="form-section">
+                                    <h4>Dane urządzenia</h4>
+                                    <div className="form-fields">
+                                        <div className="form-group"><label>Producent *</label><input value={form.manufacturer} onChange={e => updateField('manufacturer', e.target.value)} placeholder="np. Bosch" required /></div>
+                                        <div className="form-group"><label>Produkt / model *</label><input value={form.product_model} onChange={e => updateField('product_model', e.target.value)} placeholder="np. Serie 6 WGG244Z" required /></div>
+                                        <div className="form-group"><label>Numer seryjny {!form.serial_number_unavailable && '*'}</label><input value={form.serial_number} onChange={e => updateField('serial_number', e.target.value)} disabled={form.serial_number_unavailable} required={!form.serial_number_unavailable} /></div>
+                                        <label className="serial-unavailable"><input type="checkbox" checked={form.serial_number_unavailable} onChange={e => { updateField('serial_number_unavailable', e.target.checked); if (e.target.checked) updateField('serial_number', ''); }} /> Nie posiadam / nie mogę odczytać numeru seryjnego</label>
+                                        <div className="form-group"><label>Data zakupu *</label><input type="date" value={form.purchase_date} onChange={e => updateField('purchase_date', e.target.value)} required /></div>
+                                    </div>
+                                </section>
+
+                                <section className="form-section form-section-wide">
+                                    <h4>Informacje o reklamacji</h4>
+                                    <div className="form-fields">
+                                        <div className="form-group"><label>Typ reklamacji *</label><select value={form.complaint_type} onChange={e => updateField('complaint_type', e.target.value)} required><option>Gwarancyjna</option><option>Rękojmia</option><option>Pogwarancyjna</option><option>Inna</option></select></div>
+                                        <div className="form-group form-group-wide"><label>Opis usterki *</label><textarea rows="4" placeholder="Opisz dokładnie problem, objawy i okoliczności występowania usterki..." value={form.issue_description} onChange={e => updateField('issue_description', e.target.value)} required /></div>
+                                    </div>
+                                </section>
                             </div>
 
                             {formError && <p className="form-error">{formError}</p>}
-
                             <div className="modal-actions">
-                                <button
-                                    type="button"
-                                    className="btn-secondary"
-                                    onClick={() => setIsModalOpen(false)}
-                                >
-                                    Anuluj
-                                </button>
-                                <button
-                                    type="submit"
-                                    className="btn-primary"
-                                    disabled={isSubmitting}
-                                >
-                                    <Send size={16} /> {isSubmitting ? 'Wysyłanie...' : 'Wyślij zgłoszenie'}
-                                </button>
+                                <button type="button" className="btn-secondary" onClick={() => setIsModalOpen(false)}>Anuluj</button>
+                                <button type="submit" className="btn-primary" disabled={isSubmitting}><Send size={16} /> {isSubmitting ? 'Wysyłanie...' : 'Wyślij zgłoszenie'}</button>
                             </div>
                         </form>
                     </div>

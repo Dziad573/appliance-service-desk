@@ -1,47 +1,39 @@
-import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import React from 'react';
+import { Link, useLocation } from 'react-router-dom';
+import { UserRound } from 'lucide-react';
 import useStore from '../../store/useStore';
 import './TopBar.scss';
 
 export const TopBar = () => {
     const { user, logout } = useStore();
-    const [isMenuOpen, setIsMenuOpen] = useState(false);
+    const location = useLocation();
+    const isUserPanelPage = location.pathname === '/user-panel';
 
     const handleLogout = () => {
         logout();
-    };
-
-    const toggleMenu = () => {
-        setIsMenuOpen(!isMenuOpen);
     };
 
     return (
         <nav className="topbar-prz">
             <div className="topbar-prz__logo">
                 <Link to="/" className="text-logo">
-                    Serwis Urządzeń
+                    <span>Serwis Urządzeń</span>
                 </Link>
             </div>
 
             <div className="topbar-prz__actions">
-                {!user ? (
+                {user && (
                     <>
-                        <Link to="/login" className="btn btn-register">Zaloguj</Link>
-                        <Link to="/register" className="btn btn-register">Zarejestruj</Link>
-                    </>
-                ) : (
-                    <>
-                        {user.role === 'user' && (
-                            <Link to="/user-panel" className="btn btn-register">
-                                Panel Użytkownika
+                        <span className="topbar-prz__user">
+                            <UserRound size={15} />
+                            {user.login || user.username || 'Użytkownik'}
+                        </span>
+                        {user.role === 'user' && !isUserPanelPage && (
+                            <Link to="/user-panel" className="btn btn-user-panel">
+                                Panel użytkownika
                             </Link>
                         )}
-
-                        <button
-                            onClick={handleLogout}
-                            className="btn btn-login"
-                            style={{ marginLeft: '10px' }}
-                        >
+                        <button onClick={handleLogout} className="btn btn-login">
                             Wyloguj
                         </button>
                     </>
