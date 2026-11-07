@@ -80,8 +80,6 @@ app.post('/reports', async (req, res) => {
             complaint_type
         } = req.body;
 
-        // Formularz przesyła product_model; device_name pozostaje wymaganym
-        // polem starszych widoków i kolumną NOT NULL w tabeli reports.
         const device_name = product_model || req.body.device_name;
 
         const newReport = await Report.create({
