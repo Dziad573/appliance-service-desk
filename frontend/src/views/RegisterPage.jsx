@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { User, Lock } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { register } from '../services/registerService';
 import './RegisterPage.scss';
 
 export const RegisterPage = () => {
@@ -8,11 +9,13 @@ export const RegisterPage = () => {
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
     const [error, setError] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
+    
+    const navigate = useNavigate();
 
-    const handleRegister = (e) => {
-        e.preventDefault(); // Zapobiega przeładowaniu strony
+    const handleRegister = async (e) => {
+        e.preventDefault();
 
-        // Podstawowa walidacja formularza
         if (!loginInput || !password || !confirmPassword) {
             setError('Wypełnij wszystkie pola.');
             return;
@@ -23,13 +26,19 @@ export const RegisterPage = () => {
             return;
         }
 
-        // Jeśli walidacja przejdzie, czyścimy błąd i wysyłamy dane
-        setError('');
-        console.log('Wysyłam dane rejestracji:', { loginInput, password });
+        try {
+            setError('');
+            setIsLoading(true);
 
-        // Tutaj w przyszłości dodasz wywołanie API, np.:
-        // await register(loginInput, password);
-        // navigate('/login');
+            await register(loginInput, password);
+
+            setIsLoading(false);
+            navigate('/login');
+        } catch (err) {
+            setIsLoading(false);
+            const errorMsg = err.response?.data?.message || 'Nie udało się zarejestrować. Spróbuj ponownie.';
+            setError(errorMsg);
+        }
     };
 
     return (
@@ -72,9 +81,10 @@ export const RegisterPage = () => {
 
                 {error && <p className="register-card__error">{error}</p>}
 
-                <button type="submit" className="register-card__button">
-                    Zarejestruj
+                <button type="submit" className="register-card__button" disabled={isLoading}>
+                    {isLoading ? 'Rejestrowanie...' : 'Zarejestruj'}
                 </button>
+                
                 <p className="register-card__login">
                     Masz już konto? <Link to="/login">Zaloguj się</Link>.
                 </p>

@@ -36,6 +36,32 @@ app.post('/login', async (req, res) => {
     }
 });
 
+app.post('/register', async (req, res) => {
+    try {
+        const { login, password, role } = req.body;
+
+        const existingUser = await User.findOne({ where: { login } });
+        if (existingUser) {
+            return res.status(400).json({ message: 'Użytkownik o takim loginie już istnieje.' });
+        }
+
+        const newUser = await User.create({
+            login,
+            password,
+            role: role || 'user'
+        });
+
+        res.status(201).json({
+            id: newUser.id,
+            login: newUser.login,
+            role: newUser.role
+        });
+    } catch (err) {
+        console.error('Błąd rejestracji:', err);
+        res.status(500).json({ message: 'Błąd serwera podczas rejestracji.' });
+    }
+});
+
 app.post('/reports', async (req, res) => {
     try {
         const {
