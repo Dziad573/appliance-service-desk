@@ -12,7 +12,8 @@ export const LoginPage = () => {
     const { setUser } = useStore();
     const navigate = useNavigate();
 
-    const handleLogin = async () => {
+    const handleLogin = async (e) => {
+        e.preventDefault(); 
         try {
             const userData = await login(loginInput, password);
             setUser(userData);
@@ -31,7 +32,7 @@ export const LoginPage = () => {
 
     return (
         <div className="login-container">
-            <div className="login-card">
+            <form className="login-card" onSubmit={handleLogin}>
                 <h2 className="login-card__title">Zaloguj się</h2>
 
                 <div className="input-group">
@@ -58,13 +59,14 @@ export const LoginPage = () => {
 
                 {error && <p className="login-card__error">{error}</p>}
 
-                <button className="login-card__button" onClick={handleLogin}>
+                <button type="submit" className="login-card__button">
                     Zaloguj
                 </button>
+                
                 <p className="login-card__register">
                     Nie masz jeszcze konta? <Link to="/register">Zarejestruj się</Link>.
                 </p>
-            </div>
+            </form>
         </div>
     );
 };
