@@ -12,7 +12,10 @@
 .register-container {
     /* Wysokość ekranu minus wysokość TopBaru */
     min-height: calc(100vh - 80px);
-    background-color: var(--bg-gray);
+    background-color: #f4f7fb;
+    background-image:
+        radial-gradient(ellipse at 88% 0%, rgba(1, 118, 211, 0.10), transparent 42%),
+        linear-gradient(105deg, #f4f8fd 0%, #edf5fd 100%);
     display: flex;
     justify-content: center;
     align-items: center;
@@ -26,7 +29,7 @@
     max-width: 400px;
     padding: 2.5rem 2rem;
     border-radius: 12px;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    box-shadow: 0 8px 24px rgba(20, 55, 95, 0.07), 0 0 34px rgba(1, 118, 211, 0.045);
     display: flex;
     flex-direction: column;
     gap: 1.25rem;

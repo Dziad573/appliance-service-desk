@@ -39,7 +39,7 @@ export const App = () => {
                     element={
                         user
                             ? <Navigate to={getRedirectPath(user)} replace />
-                            : <HomePage />
+                            : <Navigate to="/login" replace />
                     }
                 />
 
