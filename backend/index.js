@@ -209,10 +209,10 @@ const REPORT_STATUSES = [
     'Przyjęte do realizacji',
     'Diagnoza',
     'W naprawie',
-    'Testy / kontrola jakości',
-    'Gotowe do odbioru / wysyłki'
+    'Testy QA',
+    'Gotowe do wysyłki'
 ];
-const TERMINAL_STATUSES = ['Zakończona', 'Odrzucona', 'Anulowana'];
+const TERMINAL_STATUSES = ['Zakończona', 'Zakończona niepowodzeniem', 'Odrzucona', 'Anulowana'];
 const PAUSE_REASONS = [
     'Oczekiwanie na klienta',
     'Oczekiwanie na części',
@@ -257,13 +257,15 @@ app.patch('/reports/:reportId/status', async (req, res) => {
         const allowedTerminalTransitions = {
             'Nowe': ['Anulowana'],
             'Diagnoza': ['Odrzucona', 'Zakończona'],
-            'Gotowe do odbioru / wysyłki': ['Zakończona']
+            'Gotowe do wysyłki': ['Zakończona']
         };
         if (TERMINAL_STATUSES.includes(status)) {
             const allowed = allowedTerminalTransitions[report.status] || [];
             if (!allowed.includes(status)) {
                 return res.status(409).json({ message: 'Nie można wykonać tej operacji na obecnym etapie reklamacji' });
             }
+        } else if (report.status === 'Testy QA' && status === 'Gotowe do wysyłki' && report.repair_code !== 'success') {
+            return res.status(409).json({ message: 'Najpierw zapisz pozytywny wynik kontroli QA.' });
         } else if (nextIndex !== currentIndex + 1) {
             return res.status(409).json({ message: 'Można przejść tylko do kolejnego etapu procesu' });
         }
@@ -301,8 +303,8 @@ app.patch('/reports/:reportId/service-notes', async (req, res) => {
         if (field === 'diagnosis_description' && !['Diagnoza', 'W naprawie'].includes(report.status)) {
             return res.status(409).json({ message: 'Opis diagnozy można edytować wyłącznie w statusie Diagnoza lub W naprawie.' });
         }
-        if (field === 'repair_result' && report.status !== 'Testy / kontrola jakości') {
-            return res.status(409).json({ message: 'Rezultat naprawy można edytować wyłącznie w statusie Testy / kontrola jakości.' });
+        if (field === 'repair_result' && report.status !== 'Testy QA') {
+            return res.status(409).json({ message: 'Rezultat naprawy można edytować wyłącznie w statusie Testy QA.' });
         }
 
         report[field] = value || null;
@@ -587,9 +589,19 @@ app.patch('/inventory/items/:id', async (req, res) => {
   try {
     const item = await Item.findByPk(Number(req.params.id));
     if (!item) return res.status(404).json({ message: 'Nie znaleziono pozycji.' });
-    await item.update({ is_active: req.body.is_active === false ? false : true });
+    if (Object.prototype.hasOwnProperty.call(req.body, 'is_active')) {
+      await item.update({ is_active: req.body.is_active === false ? false : true });
+    } else {
+      const fields = ['brand_id','item_type','item_name','model_number','part_number','purchase_price','sale_price','description'];
+      const updates = {};
+      fields.forEach(field => { if (Object.prototype.hasOwnProperty.call(req.body, field)) updates[field] = req.body[field] === '' ? null : req.body[field]; });
+      if (updates.brand_id != null) updates.brand_id = Number(updates.brand_id);
+      if (updates.item_type && !['device','component','other'].includes(updates.item_type)) return res.status(400).json({ message: 'Nieprawidłowy typ pozycji.' });
+      if (updates.item_name !== undefined && !String(updates.item_name || '').trim()) return res.status(400).json({ message: 'Nazwa pozycji jest wymagana.' });
+      await item.update(updates);
+    }
     res.json(item);
-  } catch (e) { res.status(500).json({ message: 'Nie udało się zmienić pozycji.' }); }
+  } catch (e) { console.error(e); res.status(500).json({ message: 'Nie udało się zapisać pozycji.' }); }
 });
 app.get('/inventory/warehouses', async (req, res) => {
   try { res.json(await Warehouse.findAll({ order: [['warehouse_name', 'ASC']] })); }
@@ -619,6 +631,93 @@ app.post('/inventory/receipts', async (req, res) => {
   } catch (e) { console.error(e); res.status(400).json({ message: 'Nie udało się przyjąć dostawy.' }); }
 });
 
+// Zbiorcze zatowarowanie lub wydanie wielu pozycji z jednego magazynu.
+app.post('/inventory/stock-transactions', async (req, res) => {
+  const transaction = await sequelize.transaction();
+  try {
+    const warehouse_id = Number(req.body.warehouse_id);
+    const direction = req.body.direction;
+    const rows = Array.isArray(req.body.items) ? req.body.items : [];
+    if (!Number.isInteger(warehouse_id) || !['in','out'].includes(direction) || !rows.length) {
+      await transaction.rollback();
+      return res.status(400).json({ message: 'Wybierz magazyn i dodaj co najmniej jedną pozycję.' });
+    }
+    const warehouse = await Warehouse.findByPk(warehouse_id, { transaction });
+    if (!warehouse || (direction === 'out' && warehouse.warehouse_type === 'broken')) {
+      await transaction.rollback();
+      return res.status(400).json({ message: 'Nieprawidłowy magazyn dla tej operacji.' });
+    }
+    for (const row of rows) {
+      const item_id = Number(row.item_id), quantity = Number(row.quantity);
+      if (!Number.isInteger(item_id) || !Number.isInteger(quantity) || quantity <= 0) {
+        await transaction.rollback();
+        return res.status(400).json({ message: 'Każda pozycja musi mieć poprawny item i ilość większą od zera.' });
+      }
+      const item = await Item.findByPk(item_id, { transaction });
+      if (!item || !item.is_active) {
+        await transaction.rollback();
+        return res.status(400).json({ message: 'Jedna z wybranych pozycji jest niedostępna.' });
+      }
+      let resource = await Resource.findOne({ where: { item_id, warehouse_id }, transaction, lock: sequelize.getDialect() === 'mssql' ? transaction.LOCK.UPDATE : undefined });
+      if (direction === 'out') {
+        if (!resource || resource.quantity < quantity) {
+          await transaction.rollback();
+          return res.status(409).json({ message: `Brak wystarczającej ilości pozycji ${item.item_name}. Dostępne: ${resource?.quantity || 0}.` });
+        }
+        await resource.decrement('quantity', { by: quantity, transaction });
+      } else {
+        if (!resource) resource = await Resource.create({ item_id, warehouse_id, quantity: 0 }, { transaction });
+        await resource.increment('quantity', { by: quantity, transaction });
+      }
+    }
+    await transaction.commit();
+    return res.json({ message: direction === 'in' ? 'Zatowarowanie zostało zapisane.' : 'Wydanie zostało zapisane.' });
+  } catch (err) {
+    await transaction.rollback();
+    console.error('Błąd operacji magazynowej:', err);
+    return res.status(500).json({ message: 'Nie udało się wykonać operacji magazynowej.' });
+  }
+});
+
+// Zapis wyniku QA. Sukces kieruje do wysyłki, niepowodzenie zamyka reklamację.
+app.post('/reports/:reportId/quality-result', async (req, res) => {
+  const transaction = await sequelize.transaction();
+  try {
+    const reportId = Number(req.params.reportId);
+    const userId = Number(req.body.user_id);
+    const outcome = req.body.repair_code;
+    const resultText = typeof req.body.repair_result === 'string' ? req.body.repair_result.trim() : '';
+    const addToBroken = req.body.add_to_broken === true;
+    const brokenWarehouseId = req.body.broken_warehouse_id ? Number(req.body.broken_warehouse_id) : null;
+    const editor = await User.findByPk(userId, { transaction });
+    if (!editor || editor.role !== 'admin') { await transaction.rollback(); return res.status(403).json({ message: 'Tylko administrator może zapisać wynik QA.' }); }
+    if (!['success','failure'].includes(outcome) || !resultText) { await transaction.rollback(); return res.status(400).json({ message: 'Wybierz kod wyniku i uzupełnij opis rezultatu.' }); }
+    const report = await Report.findByPk(reportId, { transaction });
+    if (!report) { await transaction.rollback(); return res.status(404).json({ message: 'Nie znaleziono reklamacji.' }); }
+    if (report.status !== 'Testy QA' || report.is_paused) { await transaction.rollback(); return res.status(409).json({ message: 'Wynik można zapisać wyłącznie na aktywnym etapie Testy QA.' }); }
+    if (outcome === 'failure' && addToBroken) {
+      if (!report.item_id || !brokenWarehouseId) { await transaction.rollback(); return res.status(400).json({ message: 'Dla urządzenia spoza katalogu nie można automatycznie dodać pozycji do magazynu. Wybierz urządzenie katalogowe i magazyn uszkodzonych.' }); }
+      const brokenWarehouse = await Warehouse.findByPk(brokenWarehouseId, { transaction });
+      if (!brokenWarehouse || brokenWarehouse.warehouse_type !== 'broken') { await transaction.rollback(); return res.status(400).json({ message: 'Wybierz magazyn typu Uszkodzony.' }); }
+      let resource = await Resource.findOne({ where: { item_id: report.item_id, warehouse_id: brokenWarehouseId }, transaction });
+      if (!resource) resource = await Resource.create({ item_id: report.item_id, warehouse_id: brokenWarehouseId, quantity: 0 }, { transaction });
+      await resource.increment('quantity', { by: 1, transaction });
+    }
+    const oldStatus = report.status;
+    report.repair_result = resultText;
+    report.repair_code = outcome;
+    report.status = outcome === 'success' ? 'Gotowe do wysyłki' : 'Zakończona niepowodzeniem';
+    await report.save({ transaction });
+    await ReportStatusHistory.create({ report_id: reportId, old_status: oldStatus, new_status: report.status, action: 'status', changed_by: userId, note: outcome === 'failure' ? 'Wynik QA: niepowodzenie' : 'Wynik QA: powodzenie' }, { transaction });
+    await transaction.commit();
+    return res.json(report);
+  } catch (err) {
+    await transaction.rollback();
+    console.error('Błąd zapisu wyniku QA:', err);
+    return res.status(500).json({ message: 'Nie udało się zapisać wyniku QA.' });
+  }
+});
+
 async function startServer() {
     try {
         await sequelize.authenticate();
@@ -628,6 +727,12 @@ async function startServer() {
         // through the reviewed SQL migration in database/.
         if (sequelize.getDialect() === 'sqlite') {
             await sequelize.sync();
+            const reportColumns = await sequelize.getQueryInterface().describeTable('reports');
+            if (!reportColumns.repair_code) {
+                await sequelize.getQueryInterface().addColumn('reports', 'repair_code', { type: require('sequelize').STRING(20), allowNull: true });
+            }
+            await sequelize.query("UPDATE reports SET status = CASE WHEN status = 'Testy / kontrola jakości' THEN 'Testy QA' WHEN status = 'Gotowe do odbioru / wysyłki' THEN 'Gotowe do wysyłki' ELSE status END");
+            await sequelize.query("UPDATE report_status_history SET old_status = CASE WHEN old_status = 'Testy / kontrola jakości' THEN 'Testy QA' WHEN old_status = 'Gotowe do odbioru / wysyłki' THEN 'Gotowe do wysyłki' ELSE old_status END, new_status = CASE WHEN new_status = 'Testy / kontrola jakości' THEN 'Testy QA' WHEN new_status = 'Gotowe do odbioru / wysyłki' THEN 'Gotowe do wysyłki' ELSE new_status END");
             console.log('[DB] Local SQLite schema is ready.');
         }
 

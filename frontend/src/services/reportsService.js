@@ -28,3 +28,8 @@ export async function updateServiceNote(reportId, field, value, userId) {
     });
     return res.data;
 }
+
+export async function saveQualityResult(reportId, data) {
+    const res = await axios.post(`http://localhost:3001/reports/${reportId}/quality-result`, data);
+    return res.data;
+}

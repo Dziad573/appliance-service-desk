@@ -20,10 +20,10 @@ import {
 } from 'lucide-react';
 
 import useStore from '../store/useStore';
-import { getReportById, updateServiceNote } from '../services/reportsService';
+import { getReportById, updateServiceNote, saveQualityResult } from '../services/reportsService';
 import { getComments, addComment } from '../services/commentsService';
 import { updateReportStatus, pauseReport, resumeReport, getReportStatusHistory } from '../services/reportStatusService';
-import { getReportParts, issueReportPart, returnReportPart, getItems, getResources } from '../services/inventoryService';
+import { getReportParts, issueReportPart, returnReportPart, getItems, getResources, getWarehouses } from '../services/inventoryService';
 
 import './ReportDetailsPage.scss';
 
@@ -55,6 +55,10 @@ export const ReportDetailsPage = () => {
     const [reportParts, setReportParts] = useState([]);
     const [stockItems, setStockItems] = useState([]);
     const [stockResources, setStockResources] = useState([]);
+    const [stockWarehouses, setStockWarehouses] = useState([]);
+    const [repairCodeDraft, setRepairCodeDraft] = useState('success');
+    const [addBrokenStock, setAddBrokenStock] = useState(false);
+    const [brokenWarehouseId, setBrokenWarehouseId] = useState('');
     const [showDiagnosisModal, setShowDiagnosisModal] = useState(false);
     const [showRepairResultModal, setShowRepairResultModal] = useState(false);
     const [showPartModal, setShowPartModal] = useState(false);
@@ -160,10 +164,10 @@ export const ReportDetailsPage = () => {
         'Przyjęte do realizacji',
         'Diagnoza',
         'W naprawie',
-        'Testy / kontrola jakości',
-        'Gotowe do odbioru / wysyłki'
+        'Testy QA',
+        'Gotowe do wysyłki'
     ];
-    const terminalStatuses = ['Zakończona', 'Odrzucona', 'Anulowana'];
+    const terminalStatuses = ['Zakończona', 'Zakończona niepowodzeniem', 'Odrzucona', 'Anulowana'];
     const pauseReasons = ['Oczekiwanie na klienta', 'Oczekiwanie na części', 'Oczekiwanie na dostawcę', 'Problem techniczny', 'Inny powód'];
 
     const loadStatusHistory = async () => {
@@ -177,10 +181,11 @@ export const ReportDetailsPage = () => {
     const loadReportParts = async () => {
         if (!report?.id || !isAdmin) return;
         try {
-            const [parts, items, resources] = await Promise.all([getReportParts(report.id), getItems(true), getResources()]);
+            const [parts, items, resources, warehouses] = await Promise.all([getReportParts(report.id), getItems(true), getResources(), getWarehouses()]);
             setReportParts(Array.isArray(parts) ? parts : []);
             setStockItems((items || []).filter(item => item.item_type === 'component' && item.is_active));
             setStockResources((resources || []).filter(resource => resource.quantity > 0 && resource.warehouse?.warehouse_type !== 'broken'));
+            setStockWarehouses(warehouses || []);
         } catch (err) { setPartsError(err.response?.data?.message || 'Nie udało się pobrać danych magazynowych.'); }
     };
     useEffect(() => { loadReportParts(); }, [report?.id, isAdmin]);
@@ -268,13 +273,13 @@ export const ReportDetailsPage = () => {
     const isTerminal = terminalStatuses.includes(report?.status);
     const canCancel = report?.status === 'Nowe';
     const canReject = report?.status === 'Diagnoza';
-    const isLastProcessStage = report?.status === 'Gotowe do odbioru / wysyłki';
+    const isLastProcessStage = report?.status === 'Gotowe do wysyłki';
     const nextProcessStatus = currentStatusIndex >= 0
         ? processStatuses[currentStatusIndex + 1]
         : null;
     const canEditDiagnosis = isAdmin && ['Diagnoza', 'W naprawie'].includes(report?.status);
-    const canEditRepairResult = isAdmin && report?.status === 'Testy / kontrola jakości';
-    const reachedQualityControl = currentStatusIndex >= 4 || statusHistory.some(item => item.new_status === 'Testy / kontrola jakości' || item.old_status === 'Testy / kontrola jakości' || item.new_status === 'Gotowe do odbioru / wysyłki' || item.old_status === 'Gotowe do odbioru / wysyłki');
+    const canEditRepairResult = isAdmin && report?.status === 'Testy QA';
+    const reachedQualityControl = currentStatusIndex >= 4 || statusHistory.some(item => item.new_status === 'Testy QA' || item.old_status === 'Testy QA' || item.new_status === 'Gotowe do wysyłki' || item.old_status === 'Gotowe do wysyłki');
     const showRepairResult = reachedQualityControl || Boolean(report?.repair_result);
 
     // Po dodaniu komentarza przewiń listę do najnowszej wiadomości
@@ -378,7 +383,7 @@ export const ReportDetailsPage = () => {
                                     );
                                 })}
                             </div>
-                            {isTerminal && <div className={`report-terminal-result report-terminal-result--${report.status === 'Zakończona' ? 'success' : report.status === 'Odrzucona' ? 'rejected' : 'cancelled'}`}>{report.status === 'Zakończona' ? 'Reklamacja zakończona' : report.status === 'Odrzucona' ? 'Reklamacja odrzucona' : 'Reklamacja anulowana'}</div>}
+                            {isTerminal && <div className={`report-terminal-result report-terminal-result--${report.status === 'Zakończona' ? 'success' : report.status === 'Zakończona niepowodzeniem' || report.status === 'Odrzucona' ? 'rejected' : 'cancelled'}`}>{report.status === 'Zakończona' ? 'Reklamacja zakończona' : report.status === 'Zakończona niepowodzeniem' ? 'Reklamacja zakończona niepowodzeniem' : report.status === 'Odrzucona' ? 'Reklamacja odrzucona' : 'Reklamacja anulowana'}</div>}
                             {report.is_paused && <div className="report-paused-info"><strong>Reklamacja wstrzymana — {report.pause_reason}</strong>{report.pause_note && <p>{report.pause_note}</p>}<small>Wstrzymano: {formatDate(report.paused_at)}</small></div>}
                             {isAdmin && !isTerminal && <div className="report-progress-actions">
                                 {!report.is_paused ? <>
@@ -399,7 +404,7 @@ export const ReportDetailsPage = () => {
                                 <button type="submit" className="report-action-button report-action-button--primary" disabled={statusBusy || !pauseReason}>Potwierdź wstrzymanie</button>
                             </form>}
                             {statusError && <p className="report-status-error">{statusError}</p>}
-                            <div className="report-status-history"><strong>Historia statusów</strong>{statusHistory.length === 0 ? <p>Brak zapisanych zmian.</p> : statusHistory.map(item => <div className="report-status-history__item" key={item.id}><span>{formatDate(item.created_at)} · {item.changedBy?.login || (item.changed_by ? `Użytkownik #${item.changed_by}` : 'System')}</span><strong>{item.action === 'pause' ? `Wstrzymano: ${item.reason}` : item.action === 'resume' ? 'Wznowiono reklamację' : `${item.old_status || '—'} → ${item.new_status}`}</strong>{item.note && <small>{item.note}</small>}</div>)}</div>
+                            
                         </section>
 
                         {/* Panel diagnozy i pobranych części */}
@@ -422,16 +427,18 @@ export const ReportDetailsPage = () => {
 
                         {isAdmin && canEditRepairResult && (
                             <section className="details-card repair-result-editor">
-                                <div className="repair-workspace__panel-heading"><div><h3>Rezultat naprawy</h3><p>Uzupełnij wynik po wykonaniu naprawy</p></div><button type="button" className="report-action-button report-action-button--primary" onClick={() => setShowRepairResultModal(true)}>Edytuj rezultat</button></div>
+                                <div className="repair-workspace__panel-heading"><div><h3>Rezultat naprawy</h3><p>Uzupełnij wynik po wykonaniu naprawy</p></div><button type="button" className="report-action-button report-action-button--primary" onClick={() => { setRepairCodeDraft(report.repair_code || 'success'); setAddBrokenStock(false); setBrokenWarehouseId(''); setShowRepairResultModal(true); }}>Edytuj rezultat</button></div>
                                 <div className="report-description">{report.repair_result || 'Rezultat naprawy nie został jeszcze uzupełniony.'}</div>
                             </section>
                         )}
 
                         {showRepairResultModal && (
                             <div className="repair-modal-backdrop" role="presentation" onMouseDown={e => { if (e.target === e.currentTarget) setShowRepairResultModal(false); }}>
-                                <form className="repair-modal" onSubmit={async e => { e.preventDefault(); const saved = await saveServiceNote('repair_result'); if (saved) setShowRepairResultModal(false); }}>
+                                <form className="repair-modal" onSubmit={async e => { e.preventDefault(); if (serviceNoteBusy) return; try { setServiceNoteBusy(true); setServiceNoteError(''); const updated = await saveQualityResult(report.id, { user_id: user?.id, repair_result: repairResultDraft, repair_code: repairCodeDraft, add_to_broken: addBrokenStock, broken_warehouse_id: brokenWarehouseId || null }); setReport(updated); setShowRepairResultModal(false); await loadStatusHistory(); } catch (err) { setServiceNoteError(err.response?.data?.message || 'Nie udało się zapisać wyniku QA.'); } finally { setServiceNoteBusy(false); } }}>
                                     <div className="repair-modal__header"><div><h2>Rezultat naprawy</h2><p>Opisz wykonane czynności i wynik naprawy</p></div><button type="button" onClick={() => setShowRepairResultModal(false)}><X size={20} /></button></div>
-                                    <textarea rows={7} value={repairResultDraft} onChange={e => setRepairResultDraft(e.target.value)} placeholder="Opisz wykonane czynności i rezultat naprawy..." />
+                                    <label className="quality-result-code">Kod naprawy<select value={repairCodeDraft} onChange={e => setRepairCodeDraft(e.target.value)}><option value="success">Naprawa zakończona powodzeniem</option><option value="failure">Naprawa zakończona niepowodzeniem</option></select></label>
+                                    <textarea rows={6} value={repairResultDraft} onChange={e => setRepairResultDraft(e.target.value)} placeholder="Opisz wykonane czynności i rezultat naprawy..." />
+                                    {repairCodeDraft === 'failure' && report.item_id && <div className="quality-broken-option"><label><input type="checkbox" checked={addBrokenStock} onChange={e => setAddBrokenStock(e.target.checked)}/> Dodaj urządzenie do magazynu uszkodzonych</label>{addBrokenStock && <select required value={brokenWarehouseId} onChange={e => setBrokenWarehouseId(e.target.value)}><option value="">Wybierz magazyn uszkodzonych</option>{stockWarehouses.filter(w => w.warehouse_type === 'broken').map(w => <option key={w.id} value={w.id}>{w.warehouse_name}</option>)}</select>}</div>}
                                     {serviceNoteError && <p className="service-note-message service-note-message--error">{serviceNoteError}</p>}
                                     <div className="repair-modal__actions"><button type="button" className="report-action-button" onClick={() => setShowRepairResultModal(false)}>Anuluj</button><button type="submit" className="report-action-button report-action-button--primary" disabled={serviceNoteBusy}>{serviceNoteBusy ? 'Zapisywanie...' : 'Zapisz rezultat'}</button></div>
                                 </form>
@@ -693,6 +700,11 @@ export const ReportDetailsPage = () => {
                             </aside>
 
                         </div>
+
+                        <details className="details-card report-history-card">
+                            <summary className="details-card__header"><div className="details-card__icon"><Clock size={19} /></div><div><h2>Historia statusów</h2><p>Pełna historia zmian i wstrzymań reklamacji</p></div><span className="comments-count">{statusHistory.length}</span></summary>
+                            <div className="report-status-history">{statusHistory.length === 0 ? <p>Brak zapisanych zmian.</p> : statusHistory.map(item => <div className="report-status-history__item" key={item.id}><span>{formatDate(item.created_at)} · {item.changedBy?.login || (item.changed_by ? `Użytkownik #${item.changed_by}` : 'System')}</span><strong>{item.action === 'pause' ? `Wstrzymano: ${item.reason}` : item.action === 'resume' ? 'Wznowiono reklamację' : `${item.old_status || '—'} → ${item.new_status}`}</strong>{item.note && <small>{item.note}</small>}</div>)}</div>
+                        </details>
                     </>
                 )}
 

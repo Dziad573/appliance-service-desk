@@ -62,5 +62,8 @@
 .inventory-secondary { min-height: 40px; }
 @keyframes inventoryModalIn { from { opacity: 0; transform: translateY(8px) scale(.99); } to { opacity: 1; transform: translateY(0) scale(1); } }
 @media (max-width: 700px) { .inventory-hero { padding: 24px 18px; min-height: 125px; } .inventory-content { padding: 18px 12px 35px; } .inventory-panel { padding: 17px 13px; } .inventory-toolbar { align-items: stretch; } .inventory-tabs { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); } .inventory-tabs button { justify-content: flex-start; } .inventory-toolbar > .inventory-primary { width: 100%; } .inventory-form--inline { align-items: stretch; flex-direction: column; } .inventory-form--inline > button { width: 100%; } .inventory-modal-overlay { padding: 10px; align-items: flex-end; } .inventory-modal { max-height: 92vh; border-radius: 12px 12px 0 0; } .inventory-modal-form .inventory-modal-grid { grid-template-columns: 1fr; } .inventory-modal-grid__wide { grid-column: auto; } .inventory-modal__header { padding: 16px; } .inventory-modal-form { padding: 17px 16px 0; } .inventory-modal-actions { margin: 0 -16px; padding: 13px 16px; } }
-.inventory-toolbar__context { color: #526b89; font-size: .92rem; font-weight: 700; }
-.inventory-toolbar__actions { display: flex; flex-wrap: wrap; gap: 9px; }
+
+.inventory-bulk-rows { display: grid; gap: 12px; margin: 14px 0; }
+.inventory-bulk-row { display: grid; grid-template-columns: minmax(0, 1fr) 130px auto; align-items: end; gap: 12px; padding: 12px; border: 1px solid var(--border-color, #d8dee9); border-radius: 10px; }
+.inventory-bulk-row label { display: grid; gap: 6px; }
+@media (max-width: 640px) { .inventory-bulk-row { grid-template-columns: 1fr; } }

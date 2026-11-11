@@ -32,6 +32,7 @@ module.exports = (sequelize, DataTypes) => {
         },
         diagnosis_description: { type: DataTypes.TEXT, allowNull: true },
         repair_result: { type: DataTypes.TEXT, allowNull: true },
+        repair_code: { type: DataTypes.STRING(20), allowNull: true },
         status: { 
             type: DataTypes.STRING(50), 
             allowNull: false, 
