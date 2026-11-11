@@ -13,13 +13,17 @@ import {
     MessageCircle,
     Send,
     Reply,
-    X
+    X,
+    Package,
+    Plus,
+    RotateCcw
 } from 'lucide-react';
 
 import useStore from '../store/useStore';
 import { getReportById, updateServiceNote } from '../services/reportsService';
 import { getComments, addComment } from '../services/commentsService';
 import { updateReportStatus, pauseReport, resumeReport, getReportStatusHistory } from '../services/reportStatusService';
+import { getReportParts, issueReportPart, returnReportPart, getItems, getResources } from '../services/inventoryService';
 
 import './ReportDetailsPage.scss';
 
@@ -48,6 +52,15 @@ export const ReportDetailsPage = () => {
     const [serviceNoteBusy, setServiceNoteBusy] = useState(false);
     const [serviceNoteError, setServiceNoteError] = useState('');
     const [serviceNoteSuccess, setServiceNoteSuccess] = useState('');
+    const [reportParts, setReportParts] = useState([]);
+    const [stockItems, setStockItems] = useState([]);
+    const [stockResources, setStockResources] = useState([]);
+    const [showDiagnosisModal, setShowDiagnosisModal] = useState(false);
+    const [showRepairResultModal, setShowRepairResultModal] = useState(false);
+    const [showPartModal, setShowPartModal] = useState(false);
+    const [partForm, setPartForm] = useState({ item_id: '', warehouse_id: '', quantity: 1, issue_type: 'warranty' });
+    const [partsBusy, setPartsBusy] = useState(false);
+    const [partsError, setPartsError] = useState('');
     const [showPauseForm, setShowPauseForm] = useState(false);
     const [pauseReason, setPauseReason] = useState('');
     const [pauseNote, setPauseNote] = useState('');
@@ -161,6 +174,18 @@ export const ReportDetailsPage = () => {
 
     useEffect(() => { loadStatusHistory(); }, [report?.id]);
 
+    const loadReportParts = async () => {
+        if (!report?.id || !isAdmin) return;
+        try {
+            const [parts, items, resources] = await Promise.all([getReportParts(report.id), getItems(true), getResources()]);
+            setReportParts(Array.isArray(parts) ? parts : []);
+            setStockItems((items || []).filter(item => item.item_type === 'component' && item.is_active));
+            setStockResources((resources || []).filter(resource => resource.quantity > 0 && resource.warehouse?.warehouse_type !== 'broken'));
+        } catch (err) { setPartsError(err.response?.data?.message || 'Nie udało się pobrać danych magazynowych.'); }
+    };
+    useEffect(() => { loadReportParts(); }, [report?.id, isAdmin]);
+
+
     const handleStatusChange = async (nextStatus) => {
         if (!isAdmin || statusBusy) return;
         try {
@@ -205,12 +230,39 @@ export const ReportDetailsPage = () => {
             setDiagnosisDraft(updated.diagnosis_description || '');
             setRepairResultDraft(updated.repair_result || '');
             setServiceNoteSuccess('Zapisano zmiany.');
+            return true;
         } catch (err) {
             setServiceNoteError(err.response?.data?.message || 'Nie udało się zapisać danych serwisowych.');
+            return false;
         } finally {
             setServiceNoteBusy(false);
         }
     };
+
+    const submitPartIssue = async (event) => {
+        event.preventDefault();
+        if (!report?.id || !user?.id || partsBusy) return;
+        try {
+            setPartsBusy(true); setPartsError('');
+            await issueReportPart(report.id, { ...partForm, item_id: Number(partForm.item_id), warehouse_id: Number(partForm.warehouse_id), quantity: Number(partForm.quantity), issued_by: user.id });
+            setPartForm({ item_id: '', warehouse_id: '', quantity: 1, issue_type: 'warranty' });
+            setShowPartModal(false);
+            await loadReportParts();
+        } catch (err) { setPartsError(err.response?.data?.message || 'Nie udało się pobrać części.'); }
+        finally { setPartsBusy(false); }
+    };
+
+    const handlePartReturn = async (partId) => {
+        if (!window.confirm('Czy na pewno zwrócić tę część do magazynu?')) return;
+        try {
+            setPartsBusy(true); setPartsError('');
+            await returnReportPart(report.id, partId, user?.id);
+            await loadReportParts();
+        } catch (err) { setPartsError(err.response?.data?.message || 'Nie udało się zwrócić części.'); }
+        finally { setPartsBusy(false); }
+    };
+
+    const selectedPartResources = stockResources.filter(resource => String(resource.item_id) === String(partForm.item_id));
 
     const currentStatusIndex = processStatuses.indexOf(report?.status);
     const isTerminal = terminalStatuses.includes(report?.status);
@@ -220,7 +272,7 @@ export const ReportDetailsPage = () => {
     const nextProcessStatus = currentStatusIndex >= 0
         ? processStatuses[currentStatusIndex + 1]
         : null;
-    const canEditDiagnosis = isAdmin && report?.status === 'Diagnoza';
+    const canEditDiagnosis = isAdmin && ['Diagnoza', 'W naprawie'].includes(report?.status);
     const canEditRepairResult = isAdmin && report?.status === 'Testy / kontrola jakości';
     const reachedQualityControl = currentStatusIndex >= 4 || statusHistory.some(item => item.new_status === 'Testy / kontrola jakości' || item.old_status === 'Testy / kontrola jakości' || item.new_status === 'Gotowe do odbioru / wysyłki' || item.old_status === 'Gotowe do odbioru / wysyłki');
     const showRepairResult = reachedQualityControl || Boolean(report?.repair_result);
@@ -350,26 +402,64 @@ export const ReportDetailsPage = () => {
                             <div className="report-status-history"><strong>Historia statusów</strong>{statusHistory.length === 0 ? <p>Brak zapisanych zmian.</p> : statusHistory.map(item => <div className="report-status-history__item" key={item.id}><span>{formatDate(item.created_at)} · {item.changedBy?.login || (item.changed_by ? `Użytkownik #${item.changed_by}` : 'System')}</span><strong>{item.action === 'pause' ? `Wstrzymano: ${item.reason}` : item.action === 'resume' ? 'Wznowiono reklamację' : `${item.old_status || '—'} → ${item.new_status}`}</strong>{item.note && <small>{item.note}</small>}</div>)}</div>
                         </section>
 
-                        {/* Edycja danych serwisowych dostępna tylko na właściwym etapie */}
-                        {isAdmin && (canEditDiagnosis || canEditRepairResult) && (
-                            <section className="details-card service-notes-editor">
-                                <div className="details-card__header">
-                                    <div className="details-card__icon"><Wrench size={19} /></div>
-                                    <div><h2>Dane serwisowe do uzupełnienia</h2><p>Pola dostępne do edycji na bieżącym etapie reklamacji</p></div>
+                        {/* Panel diagnozy i pobranych części */}
+                        {isAdmin && ['Diagnoza', 'W naprawie'].includes(report.status) && (
+                            <section className="details-card repair-workspace">
+                                <div className="details-card__header"><div className="details-card__icon"><Wrench size={19} /></div><div><h2>Diagnoza / naprawa</h2><p>Opis techniczny oraz części wykorzystane w realizacji reklamacji</p></div></div>
+                                <div className="repair-workspace__grid">
+                                    <div className="repair-workspace__diagnosis">
+                                        <div className="repair-workspace__panel-heading"><h3>Opis diagnozy</h3><button type="button" className="report-action-button report-action-button--primary" onClick={() => setShowDiagnosisModal(true)}>Edytuj opis</button></div>
+                                        <div className="report-description repair-workspace__description">{report.diagnosis_description || 'Diagnoza nie została jeszcze uzupełniona.'}</div>
+                                    </div>
+                                    <div className="repair-workspace__parts">
+                                        <div className="repair-workspace__panel-heading"><h3><Package size={17} /> Pobrane części</h3><button type="button" className="report-action-button report-action-button--primary" onClick={() => { setPartsError(''); setShowPartModal(true); }}><Plus size={15} /> Pobierz części</button></div>
+                                        {reportParts.filter(part => !part.returned_at).length === 0 ? <p className="repair-parts-empty">Nie pobrano jeszcze żadnych części do tej reklamacji.</p> : <div className="repair-parts-list">{reportParts.filter(part => !part.returned_at).map(part => <div className="repair-part-row" key={part.id}><div className="repair-part-row__main"><strong>{part.item?.brand?.brand_name} — {part.item?.item_name}</strong><span>{part.item?.part_number || part.item?.model_number || '—'} · {part.warehouse?.warehouse_name}</span></div><strong className="repair-part-row__quantity">{part.quantity} szt.</strong><span className={`repair-part-type repair-part-type--${part.issue_type}`}>{part.issue_type === 'warranty' ? 'Gwarancyjna' : 'Pozagwarancyjna'}</span><button type="button" className="report-action-button report-action-button--subtle" disabled={partsBusy} onClick={() => handlePartReturn(part.id)} title="Zwróć do magazynu"><RotateCcw size={14} /> Zwróć</button></div>)}</div>}
+                                        {partsError && <p className="service-note-message service-note-message--error">{partsError}</p>}
+                                    </div>
                                 </div>
-                                {canEditDiagnosis && <div className="service-note-edit-field">
-                                    <label htmlFor="diagnosis-description">Opis diagnozy</label>
-                                    <textarea id="diagnosis-description" rows={4} value={diagnosisDraft} onChange={e => setDiagnosisDraft(e.target.value)} placeholder="Opisz przeprowadzoną diagnozę, wykryte przyczyny i ustalenia technika..." />
-                                    <button type="button" className="report-action-button report-action-button--primary" disabled={serviceNoteBusy} onClick={() => saveServiceNote('diagnosis_description')}>{serviceNoteBusy ? 'Zapisywanie...' : 'Zapisz opis diagnozy'}</button>
-                                </div>}
-                                {canEditRepairResult && <div className="service-note-edit-field">
-                                    <label htmlFor="repair-result">Rezultat naprawy</label>
-                                    <textarea id="repair-result" rows={4} value={repairResultDraft} onChange={e => setRepairResultDraft(e.target.value)} placeholder="Opisz wykonane czynności i rezultat naprawy..." />
-                                    <button type="button" className="report-action-button report-action-button--primary" disabled={serviceNoteBusy} onClick={() => saveServiceNote('repair_result')}>{serviceNoteBusy ? 'Zapisywanie...' : 'Zapisz rezultat naprawy'}</button>
-                                </div>}
-                                {serviceNoteError && <p className="service-note-message service-note-message--error">{serviceNoteError}</p>}
-                                {serviceNoteSuccess && <p className="service-note-message service-note-message--success">{serviceNoteSuccess}</p>}
                             </section>
+                        )}
+
+                        {isAdmin && canEditRepairResult && (
+                            <section className="details-card repair-result-editor">
+                                <div className="repair-workspace__panel-heading"><div><h3>Rezultat naprawy</h3><p>Uzupełnij wynik po wykonaniu naprawy</p></div><button type="button" className="report-action-button report-action-button--primary" onClick={() => setShowRepairResultModal(true)}>Edytuj rezultat</button></div>
+                                <div className="report-description">{report.repair_result || 'Rezultat naprawy nie został jeszcze uzupełniony.'}</div>
+                            </section>
+                        )}
+
+                        {showRepairResultModal && (
+                            <div className="repair-modal-backdrop" role="presentation" onMouseDown={e => { if (e.target === e.currentTarget) setShowRepairResultModal(false); }}>
+                                <form className="repair-modal" onSubmit={async e => { e.preventDefault(); const saved = await saveServiceNote('repair_result'); if (saved) setShowRepairResultModal(false); }}>
+                                    <div className="repair-modal__header"><div><h2>Rezultat naprawy</h2><p>Opisz wykonane czynności i wynik naprawy</p></div><button type="button" onClick={() => setShowRepairResultModal(false)}><X size={20} /></button></div>
+                                    <textarea rows={7} value={repairResultDraft} onChange={e => setRepairResultDraft(e.target.value)} placeholder="Opisz wykonane czynności i rezultat naprawy..." />
+                                    {serviceNoteError && <p className="service-note-message service-note-message--error">{serviceNoteError}</p>}
+                                    <div className="repair-modal__actions"><button type="button" className="report-action-button" onClick={() => setShowRepairResultModal(false)}>Anuluj</button><button type="submit" className="report-action-button report-action-button--primary" disabled={serviceNoteBusy}>{serviceNoteBusy ? 'Zapisywanie...' : 'Zapisz rezultat'}</button></div>
+                                </form>
+                            </div>
+                        )}
+
+                        {showDiagnosisModal && (
+                            <div className="repair-modal-backdrop" role="presentation" onMouseDown={e => { if (e.target === e.currentTarget) setShowDiagnosisModal(false); }}>
+                                <form className="repair-modal" onSubmit={async e => { e.preventDefault(); const saved = await saveServiceNote('diagnosis_description'); if (saved) setShowDiagnosisModal(false); }}>
+                                    <div className="repair-modal__header"><div><h2>Opis diagnozy</h2><p>Uzupełnij ustalenia technika</p></div><button type="button" onClick={() => setShowDiagnosisModal(false)}><X size={20} /></button></div>
+                                    <textarea rows={7} value={diagnosisDraft} onChange={e => setDiagnosisDraft(e.target.value)} placeholder="Opisz przeprowadzoną diagnozę, wykryte przyczyny i ustalenia technika..." />
+                                    {serviceNoteError && <p className="service-note-message service-note-message--error">{serviceNoteError}</p>}
+                                    <div className="repair-modal__actions"><button type="button" className="report-action-button" onClick={() => setShowDiagnosisModal(false)}>Anuluj</button><button type="submit" className="report-action-button report-action-button--primary" disabled={serviceNoteBusy}>{serviceNoteBusy ? 'Zapisywanie...' : 'Zapisz opis'}</button></div>
+                                </form>
+                            </div>
+                        )}
+
+                        {showPartModal && (
+                            <div className="repair-modal-backdrop" role="presentation" onMouseDown={e => { if (e.target === e.currentTarget) setShowPartModal(false); }}>
+                                <form className="repair-modal" onSubmit={submitPartIssue}>
+                                    <div className="repair-modal__header"><div><h2>Pobierz część z magazynu</h2><p>Wybierz część i określ sposób rozliczenia</p></div><button type="button" onClick={() => setShowPartModal(false)}><X size={20} /></button></div>
+                                    <label>Część<select required value={partForm.item_id} onChange={e => setPartForm(v => ({ ...v, item_id: e.target.value, warehouse_id: '' }))}><option value="">Wybierz część</option>{stockItems.filter(item => stockResources.some(resource => String(resource.item_id) === String(item.id))).map(item => <option key={item.id} value={item.id}>{item.brand?.brand_name} — {item.item_name} {item.part_number ? `(${item.part_number})` : ''}</option>)}</select></label>
+                                    <label>Magazyn<select required value={partForm.warehouse_id} disabled={!partForm.item_id} onChange={e => setPartForm(v => ({ ...v, warehouse_id: e.target.value }))}><option value="">Wybierz magazyn</option>{selectedPartResources.map(resource => <option key={resource.warehouse_id} value={resource.warehouse_id}>{resource.warehouse?.warehouse_name} — dostępne: {resource.quantity}</option>)}</select></label>
+                                    <div className="repair-modal__form-row"><label>Ilość<input type="number" min="1" step="1" required value={partForm.quantity} max={selectedPartResources.find(r => String(r.warehouse_id) === String(partForm.warehouse_id))?.quantity || undefined} onChange={e => setPartForm(v => ({ ...v, quantity: e.target.value }))} /></label><label>Rodzaj pobrania<select value={partForm.issue_type} onChange={e => setPartForm(v => ({ ...v, issue_type: e.target.value }))}><option value="warranty">Gwarancyjna</option><option value="non_warranty">Pozagwarancyjna</option></select></label></div>
+                                    {partsError && <p className="service-note-message service-note-message--error">{partsError}</p>}
+                                    <div className="repair-modal__actions"><button type="button" className="report-action-button" onClick={() => setShowPartModal(false)}>Anuluj</button><button type="submit" className="report-action-button report-action-button--primary" disabled={partsBusy}>{partsBusy ? 'Pobieranie...' : 'Potwierdź pobranie'}</button></div>
+                                </form>
+                            </div>
                         )}
 
                         {/* Zawartość strony */}
@@ -379,9 +469,9 @@ export const ReportDetailsPage = () => {
                             <main className="report-details-main">
 
                                 {/* Informacje podstawowe */}
-                                <section className="details-card">
+                                <details className="details-card details-card--collapsible" open>
 
-                                    <div className="details-card__header">
+                                    <summary className="details-card__header">
                                         <div className="details-card__icon">
                                             <FileText size={19} />
                                         </div>
@@ -390,7 +480,7 @@ export const ReportDetailsPage = () => {
                                             <h2>Informacje o zgłoszeniu</h2>
                                             <p>Podstawowe dane reklamacji</p>
                                         </div>
-                                    </div>
+                                    </summary>
 
                                     <div className="details-fields">
 
@@ -430,11 +520,11 @@ export const ReportDetailsPage = () => {
                                         )}
 
                                     </div>
-                                </section>
+                                </details>
 
                                 {isAdmin && (
-                                    <section className="details-card">
-                                        <div className="details-card__header"><div className="details-card__icon"><User size={19} /></div><div><h2>Dane zgłaszającego</h2><p>Dane kontaktowe przekazane w formularzu</p></div></div>
+                                    <details className="details-card details-card--collapsible" open>
+                                        <summary className="details-card__header"><div className="details-card__icon"><User size={19} /></div><div><h2>Dane zgłaszającego</h2><p>Dane kontaktowe przekazane w formularzu</p></div></summary>
                                         <div className="details-fields">
                                             <div className="details-field"><span>Imię i nazwisko</span><strong>{report.customer_name || 'Brak danych'}</strong></div>
                                             <div className="details-field"><span>Adres e-mail</span><strong>{report.customer_email || 'Brak danych'}</strong></div>
@@ -442,11 +532,11 @@ export const ReportDetailsPage = () => {
                                             <div className="details-field"><span>Kraj</span><strong>{report.customer_country || 'Brak danych'}</strong></div>
                                             <div className="details-field"><span>Język kontaktu</span><strong>{report.customer_language || 'Brak danych'}</strong></div>
                                         </div>
-                                    </section>
+                                    </details>
                                 )}
 
-                                <section className="details-card">
-                                    <div className="details-card__header"><div className="details-card__icon"><Wrench size={19} /></div><div><h2>Dane urządzenia</h2><p>Informacje identyfikujące produkt</p></div></div>
+                                <details className="details-card details-card--collapsible" open>
+                                    <summary className="details-card__header"><div className="details-card__icon"><Wrench size={19} /></div><div><h2>Dane urządzenia</h2><p>Informacje identyfikujące produkt</p></div></summary>
                                     <div className="details-fields">
                                         <div className="details-field"><span>Producent</span><strong>{report.manufacturer || 'Brak danych'}</strong></div>
                                         <div className="details-field"><span>Model produktu</span><strong>{report.product_model || report.device_name || 'Brak danych'}</strong></div>
@@ -454,12 +544,12 @@ export const ReportDetailsPage = () => {
                                         <div className="details-field"><span>Data zakupu</span><strong>{report.purchase_date ? new Date(report.purchase_date).toLocaleDateString('pl-PL') : 'Brak danych'}</strong></div>
                                         <div className="details-field"><span>Typ reklamacji</span><strong>{report.complaint_type || 'Brak danych'}</strong></div>
                                     </div>
-                                </section>
+                                </details>
 
                                 {/* Opis usterki */}
-                                <section className="details-card">
+                                <details className="details-card details-card--collapsible" open>
 
-                                    <div className="details-card__header">
+                                    <summary className="details-card__header">
                                         <div className="details-card__icon">
                                             <AlertCircle size={19} />
                                         </div>
@@ -468,22 +558,22 @@ export const ReportDetailsPage = () => {
                                             <h2>Opis zgłoszonej usterki</h2>
                                             <p>Informacje przekazane przez zgłaszającego</p>
                                         </div>
-                                    </div>
+                                    </summary>
 
                                     <div className="report-description">
                                         {report.issue_description || 'Brak opisu usterki.'}
                                     </div>
 
-                                </section>
+                                </details>
 
-                                {/* Informacyjne dane serwisowe: diagnoza zawsze, rezultat od etapu testów */}
-                                <section className="details-card service-notes-card">
-                                    <div className="details-card__header"><div className="details-card__icon"><Wrench size={19} /></div><div><h2>Dane serwisowe</h2><p>Informacje uzupełniane przez technika</p></div></div>
+                                {/* Klient widzi podsumowanie danych serwisowych; administrator ma je w panelu diagnozy / naprawy. */}
+                                {!isAdmin && <details className="details-card service-notes-card details-card--collapsible" open>
+                                    <summary className="details-card__header"><div className="details-card__icon"><Wrench size={19} /></div><div><h2>Dane serwisowe</h2><p>Informacje uzupełniane przez technika</p></div></summary>
                                     <div className="service-note-readonly">
                                         <div className="service-note-readonly__item"><span>Opis diagnozy</span><p>{report.diagnosis_description || 'Diagnoza nie została jeszcze uzupełniona.'}</p></div>
                                         {showRepairResult && <div className="service-note-readonly__item"><span>Rezultat naprawy</span><p>{report.repair_result || 'Rezultat naprawy nie został jeszcze uzupełniony.'}</p></div>}
                                     </div>
-                                </section>
+                                </details>}
 
                             </main>
 

@@ -9,6 +9,7 @@ const Brand = require('./Brand')(sequelize, Sequelize);
 const Item = require('./Item')(sequelize, Sequelize);
 const Warehouse = require('./Warehouse')(sequelize, Sequelize);
 const Resource = require('./Resource')(sequelize, Sequelize);
+const ReportPart = require('./ReportPart')(sequelize, Sequelize);
 
 User.hasMany(Report, { foreignKey: 'user_id', as: 'reports' });
 Report.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
@@ -21,6 +22,12 @@ Warehouse.hasMany(Resource, { foreignKey: 'warehouse_id', as: 'resources' });
 Resource.belongsTo(Warehouse, { foreignKey: 'warehouse_id', as: 'warehouse' });
 Item.hasMany(Report, { foreignKey: 'item_id', as: 'reports' });
 Report.belongsTo(Item, { foreignKey: 'item_id', as: 'item' });
+Report.hasMany(ReportPart, { foreignKey: 'report_id', as: 'parts' });
+ReportPart.belongsTo(Report, { foreignKey: 'report_id', as: 'report' });
+Item.hasMany(ReportPart, { foreignKey: 'item_id', as: 'reportParts' });
+ReportPart.belongsTo(Item, { foreignKey: 'item_id', as: 'item' });
+Warehouse.hasMany(ReportPart, { foreignKey: 'warehouse_id', as: 'reportParts' });
+ReportPart.belongsTo(Warehouse, { foreignKey: 'warehouse_id', as: 'warehouse' });
 
 // Komentarze należą do reklamacji i użytkownika, mogą też odpowiadać na inny komentarz.
 Report.hasMany(Comment, { foreignKey: 'report_id', as: 'comments' });
@@ -40,5 +47,5 @@ module.exports = {
     User,
     Report,
     Comment,
-    ReportStatusHistory, Brand, Item, Warehouse, Resource
+    ReportStatusHistory, Brand, Item, Warehouse, Resource, ReportPart
 };

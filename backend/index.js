@@ -5,7 +5,7 @@ const port = Number(process.env.PORT || 3001);
 
 app.use(cors({ origin: 'http://localhost:3000', credentials: true }));
 
-const { sequelize, User, Report, Comment, ReportStatusHistory, Brand, Item, Warehouse, Resource } = require('./models');
+const { sequelize, User, Report, Comment, ReportStatusHistory, Brand, Item, Warehouse, Resource, ReportPart } = require('./models');
 const { Op } = require('sequelize');
 
 app.use(express.json());
@@ -298,8 +298,8 @@ app.patch('/reports/:reportId/service-notes', async (req, res) => {
         const report = await Report.findByPk(reportId);
         if (!report) return res.status(404).json({ message: 'Nie znaleziono reklamacji' });
 
-        if (field === 'diagnosis_description' && report.status !== 'Diagnoza') {
-            return res.status(409).json({ message: 'Opis diagnozy można edytować wyłącznie w statusie Diagnoza.' });
+        if (field === 'diagnosis_description' && !['Diagnoza', 'W naprawie'].includes(report.status)) {
+            return res.status(409).json({ message: 'Opis diagnozy można edytować wyłącznie w statusie Diagnoza lub W naprawie.' });
         }
         if (field === 'repair_result' && report.status !== 'Testy / kontrola jakości') {
             return res.status(409).json({ message: 'Rezultat naprawy można edytować wyłącznie w statusie Testy / kontrola jakości.' });
@@ -463,6 +463,92 @@ app.post('/reports/:reportId/comments', async (req, res) => {
 
 
 // ===== KATALOG I MAGAZYN =====
+
+// Części pobrane do realizacji reklamacji. Pobranie pomniejsza stan w magazynie.
+app.get('/reports/:reportId/parts', async (req, res) => {
+  try {
+    const reportId = Number(req.params.reportId);
+    const rows = await ReportPart.findAll({
+      where: { report_id: reportId },
+      include: [
+        { model: Item, as: 'item', include: [{ model: Brand, as: 'brand' }] },
+        { model: Warehouse, as: 'warehouse' }
+      ],
+      order: [['created_at', 'DESC'], ['id', 'DESC']]
+    });
+    return res.json(rows);
+  } catch (err) {
+    console.error('Błąd pobierania części reklamacji:', err);
+    return res.status(500).json({ message: 'Nie udało się pobrać części reklamacji.' });
+  }
+});
+
+app.post('/reports/:reportId/parts', async (req, res) => {
+  const transaction = await sequelize.transaction();
+  try {
+    const reportId = Number(req.params.reportId);
+    const itemId = Number(req.body.item_id);
+    const warehouseId = Number(req.body.warehouse_id);
+    const quantity = Number(req.body.quantity);
+    const issueType = req.body.issue_type;
+    const issuedBy = req.body.issued_by == null ? null : Number(req.body.issued_by);
+    if (![reportId, itemId, warehouseId, quantity].every(Number.isInteger) || reportId <= 0 || itemId <= 0 || warehouseId <= 0 || quantity <= 0 || !['warranty', 'non_warranty'].includes(issueType)) {
+      await transaction.rollback();
+      return res.status(400).json({ message: 'Uzupełnij prawidłowo część, magazyn, ilość i rodzaj pobrania.' });
+    }
+    const issuer = issuedBy ? await User.findByPk(issuedBy, { transaction }) : null;
+    if (!issuer || issuer.role !== 'admin') { await transaction.rollback(); return res.status(403).json({ message: 'Tylko administrator może pobierać części do reklamacji.' }); }
+    const report = await Report.findByPk(reportId, { transaction });
+    if (!report) { await transaction.rollback(); return res.status(404).json({ message: 'Nie znaleziono reklamacji.' }); }
+    if (!['Diagnoza', 'W naprawie'].includes(report.status) || report.is_paused) {
+      await transaction.rollback();
+      return res.status(409).json({ message: 'Części można pobierać wyłącznie podczas diagnozy lub naprawy aktywnej reklamacji.' });
+    }
+    const item = await Item.findByPk(itemId, { transaction });
+    const warehouse = await Warehouse.findByPk(warehouseId, { transaction });
+    if (!item || !item.is_active || item.item_type !== 'component') { await transaction.rollback(); return res.status(400).json({ message: 'Wybrana pozycja nie jest aktywną częścią.' }); }
+    if (!warehouse || warehouse.warehouse_type === 'broken') { await transaction.rollback(); return res.status(400).json({ message: 'Z tego magazynu nie można pobierać części.' }); }
+    const resource = await Resource.findOne({ where: { item_id: itemId, warehouse_id: warehouseId }, transaction, lock: sequelize.getDialect() === 'mssql' ? transaction.LOCK.UPDATE : undefined });
+    if (!resource || resource.quantity < quantity) { await transaction.rollback(); return res.status(409).json({ message: `Niewystarczający stan magazynowy. Dostępne: ${resource?.quantity || 0}.` }); }
+    await resource.decrement('quantity', { by: quantity, transaction });
+    const created = await ReportPart.create({ report_id: reportId, item_id: itemId, warehouse_id: warehouseId, quantity, issue_type: issueType, issued_by: issuedBy }, { transaction });
+    await transaction.commit();
+    const result = await ReportPart.findByPk(created.id, { include: [{ model: Item, as: 'item', include: [{ model: Brand, as: 'brand' }] }, { model: Warehouse, as: 'warehouse' }] });
+    return res.status(201).json(result);
+  } catch (err) {
+    await transaction.rollback();
+    console.error('Błąd pobierania części:', err);
+    return res.status(500).json({ message: 'Nie udało się pobrać części.' });
+  }
+});
+
+// Zwrot niewykorzystanej części przywraca ilość do pierwotnego magazynu.
+app.delete('/reports/:reportId/parts/:partId', async (req, res) => {
+  const transaction = await sequelize.transaction();
+  try {
+    const reportId = Number(req.params.reportId);
+    const partId = Number(req.params.partId);
+    const returnerId = Number(req.body?.returned_by);
+    const returner = Number.isInteger(returnerId) ? await User.findByPk(returnerId, { transaction }) : null;
+    if (!returner || returner.role !== 'admin') { await transaction.rollback(); return res.status(403).json({ message: 'Tylko administrator może zwracać części do magazynu.' }); }
+    const row = await ReportPart.findOne({ where: { id: partId, report_id: reportId }, transaction });
+    if (!row) { await transaction.rollback(); return res.status(404).json({ message: 'Nie znaleziono pobrania części.' }); }
+    if (row.returned_at) { await transaction.rollback(); return res.status(409).json({ message: 'Ta część została już zwrócona.' }); }
+    const resource = await Resource.findOne({ where: { item_id: row.item_id, warehouse_id: row.warehouse_id }, transaction, lock: sequelize.getDialect() === 'mssql' ? transaction.LOCK.UPDATE : undefined });
+    if (!resource) { await transaction.rollback(); return res.status(409).json({ message: 'Nie znaleziono stanu magazynowego do zwrotu.' }); }
+    await resource.increment('quantity', { by: row.quantity, transaction });
+    row.returned_at = new Date();
+    row.returned_by = req.body?.returned_by || null;
+    await row.save({ transaction });
+    await transaction.commit();
+    return res.json({ message: 'Część zwrócona do magazynu.' });
+  } catch (err) {
+    await transaction.rollback();
+    console.error('Błąd zwrotu części:', err);
+    return res.status(500).json({ message: 'Nie udało się zwrócić części.' });
+  }
+});
+
 app.get('/inventory/brands', async (req, res) => {
   try { res.json(await Brand.findAll({ order: [['brand_name', 'ASC']] })); }
   catch (e) { console.error(e); res.status(500).json({ message: 'Nie udało się pobrać marek.' }); }
