@@ -9,6 +9,8 @@ module.exports = (sequelize, DataTypes) => {
             type: DataTypes.INTEGER, 
             allowNull: false 
         },
+        item_id: { type: DataTypes.INTEGER, allowNull: true },
+        custom_device: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
         device_name: { 
             type: DataTypes.STRING(100), 
             allowNull: false 
@@ -55,7 +57,7 @@ module.exports = (sequelize, DataTypes) => {
         created_at: { 
             type: DataTypes.DATE, 
             allowNull: false,
-            defaultValue: sequelize.literal('GETDATE()')
+            defaultValue: DataTypes.NOW
         }
     }, {
         tableName: 'reports',

@@ -400,3 +400,13 @@
         letter-spacing: -0.45px;
     }
 }
+
+/* Przycisk menu administratora – zachowuje dotychczasowy topbar */
+.topbar-prz__logo { gap: 13px; }
+.topbar-menu-toggle {
+    width: 40px; height: 40px; display: inline-flex; align-items: center; justify-content: center;
+    border: 1px solid #c8d9eb; border-radius: 8px; background: #f5f9fe; color: #24527f;
+    cursor: pointer; transition: background .15s, border-color .15s;
+    &:hover { background: #e8f3ff; border-color: #8db9e2; }
+}
+@media(max-width:600px) { .topbar-menu-toggle { width: 36px; height: 36px; } }

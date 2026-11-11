@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import {
     BrowserRouter as Router,
     Routes,
@@ -16,10 +16,13 @@ import { RegisterPage } from './views/RegisterPage.jsx';
 import { UserPanelPage } from './views/UserPanelPage.jsx';
 import { TopBar } from './components/TopBar/TopBar.jsx';
 import { ReportDetailsPage } from './views/ReportDetailsPage.jsx';
+import { InventoryPage } from './views/InventoryPage.jsx';
+import { AdminHomePage } from './views/AdminHomePage.jsx';
+import { AdminSidebar } from './components/AdminSidebar/AdminSidebar.jsx';
 
 // Domyślna strona zależna od roli użytkownika
 const getRedirectPath = (user) => {
-    if (user?.role === 'admin') return '/reports';
+    if (user?.role === 'admin') return '/admin-panel';
     if (user?.role === 'user') return '/user-panel';
 
     return '/login';
@@ -27,11 +30,13 @@ const getRedirectPath = (user) => {
 
 export const App = () => {
     const { user } = useStore();
+    const [sidebarExpanded, setSidebarExpanded] = useState(false);
 
     return (
         <Router>
-            <TopBar />
-
+            <TopBar onMenuToggle={() => setSidebarExpanded(value => !value)} />
+            {user?.role === 'admin' && <AdminSidebar expanded={sidebarExpanded} onNavigate={() => setSidebarExpanded(false)} />}
+            <div className={user?.role === 'admin' ? `app-route-content app-route-content--admin ${sidebarExpanded ? 'sidebar-expanded' : ''}` : 'app-route-content'}>
             <Routes>
                 {/* Strona główna */}
                 <Route
@@ -72,6 +77,14 @@ export const App = () => {
                             : <Navigate to={getRedirectPath(user)} replace />
                     }
                 />
+
+                {/* Moduły magazynowe - tylko admin */}
+                <Route path="/inventory" element={user?.role === 'admin' ? <InventoryPage /> : <Navigate to={getRedirectPath(user)} replace />} />
+                <Route path="/inventory/items" element={user?.role === 'admin' ? <InventoryPage /> : <Navigate to={getRedirectPath(user)} replace />} />
+                <Route path="/inventory/config" element={user?.role === 'admin' ? <InventoryPage /> : <Navigate to={getRedirectPath(user)} replace />} />
+
+                {/* Strona główna administratora */}
+                <Route path="/admin-panel" element={user?.role === 'admin' ? <AdminHomePage /> : <Navigate to={getRedirectPath(user)} replace />} />
 
                 {/* Reports - tylko admin */}
                 <Route
@@ -121,6 +134,7 @@ export const App = () => {
                     }
                 />
             </Routes>
+            </div>
         </Router>
     );
 };

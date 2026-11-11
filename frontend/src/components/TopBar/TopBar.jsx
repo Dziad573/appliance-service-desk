@@ -1,10 +1,10 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { UserRound } from 'lucide-react';
+import { UserRound, Menu } from 'lucide-react';
 import useStore from '../../store/useStore';
 import './TopBar.scss';
 
-export const TopBar = () => {
+export const TopBar = ({ onMenuToggle }) => {
     const { user, logout } = useStore();
     const location = useLocation();
     const isUserPanelPage = location.pathname === '/user-panel';
@@ -16,7 +16,8 @@ export const TopBar = () => {
     return (
         <nav className="topbar-prz">
             <div className="topbar-prz__logo">
-                <Link to="/" className="text-logo">
+                {user?.role === 'admin' && <button type="button" className="topbar-menu-toggle" onClick={onMenuToggle} aria-label="Rozwiń lub zwiń menu" title="Menu"><Menu size={21} /></button>}
+                <Link to={user?.role === 'admin' ? '/admin-panel' : '/'} className="text-logo">
                     <span>Serwis Urządzeń</span>
                 </Link>
             </div>

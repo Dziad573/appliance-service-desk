@@ -12,6 +12,7 @@ import {
     Send
 } from 'lucide-react';
 import './UserPanelPage.scss';
+import { getItems } from '../services/inventoryService';
 
 export const UserPanelPage = () => {
     const { user, reports = [], fetchReportsByUserId, addNewReport } = useStore();
@@ -23,13 +24,23 @@ export const UserPanelPage = () => {
         customer_name: '', customer_email: '', customer_phone: '',
         customer_country: 'Polska', customer_language: 'Polski',
         serial_number: '', serial_number_unavailable: false,
-        manufacturer: '', product_model: '', purchase_date: '',
+        manufacturer: '', product_model: '', item_id: '', custom_device: false, purchase_date: '',
         issue_description: '', complaint_type: 'Gwarancyjna'
     };
     const [form, setForm] = useState(emptyForm);
+    const [catalogItems, setCatalogItems] = useState([]);
+    const [selectedBrandId, setSelectedBrandId] = useState('');
+    const catalogBrands = [...new Map(
+        catalogItems
+            .filter(item => item.brand?.id != null)
+            .map(item => [String(item.brand.id), item.brand])
+    ).values()].sort((a, b) => (a.brand_name || '').localeCompare(b.brand_name || '', 'pl'));
+    const brandItems = catalogItems.filter(item => String(item.brand?.id ?? item.brand_id) === String(selectedBrandId));
     const updateField = (name, value) => setForm(current => ({ ...current, [name]: value }));
     const [formError, setFormError] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
+
+    useEffect(() => { getItems(true).then(items => setCatalogItems(items.filter(item => item.item_type === 'device'))).catch(err => console.error('Nie udało się pobrać katalogu urządzeń:', err)); }, []);
 
     // Pobieranie zgłoszeń użytkownika przy wejściu na stronę
     useEffect(() => {
@@ -42,8 +53,13 @@ export const UserPanelPage = () => {
     const handleFormSubmit = async (e) => {
         e.preventDefault();
         const required = ['customer_name', 'customer_email', 'customer_phone', 'customer_country',
-            'customer_language', 'manufacturer', 'product_model', 'purchase_date',
-            'issue_description', 'complaint_type'];
+            'customer_language', 'purchase_date', 'issue_description', 'complaint_type'];
+        if (form.custom_device && (!form.manufacturer.trim() || !form.product_model.trim())) {
+            setFormError('Podaj producenta i model urządzenia.'); return;
+        }
+        if (!form.custom_device && !form.item_id) {
+            setFormError('Wybierz urządzenie z katalogu lub zaznacz, że nie ma go na liście.'); return;
+        }
         if (required.some(key => !String(form[key] || '').trim()) ||
             (!form.serial_number_unavailable && !form.serial_number.trim())) {
             setFormError('Uzupełnij wymagane pola. Podaj numer seryjny lub zaznacz jego brak.');
@@ -63,6 +79,7 @@ export const UserPanelPage = () => {
 
         if (success) {
             setForm(emptyForm);
+            setSelectedBrandId('');
             setIsModalOpen(false);
         } else {
             setFormError('Nie udało się dodać zgłoszenia. Spróbuj ponownie.');
@@ -220,10 +237,71 @@ export const UserPanelPage = () => {
                                 <section className="form-section">
                                     <h4>Dane urządzenia</h4>
                                     <div className="form-fields">
-                                        <div className="form-group"><label>Producent *</label><input value={form.manufacturer} onChange={e => updateField('manufacturer', e.target.value)} placeholder="np. Bosch" required /></div>
-                                        <div className="form-group"><label>Produkt / model *</label><input value={form.product_model} onChange={e => updateField('product_model', e.target.value)} placeholder="np. Serie 6 WGG244Z" required /></div>
-                                        <div className="form-group"><label>Numer seryjny {!form.serial_number_unavailable && '*'}</label><input value={form.serial_number} onChange={e => updateField('serial_number', e.target.value)} disabled={form.serial_number_unavailable} required={!form.serial_number_unavailable} /></div>
-                                        <label className="serial-unavailable"><input type="checkbox" checked={form.serial_number_unavailable} onChange={e => { updateField('serial_number_unavailable', e.target.checked); if (e.target.checked) updateField('serial_number', ''); }} /> Nie posiadam / nie mogę odczytać numeru seryjnego</label>
+                                        <div className="form-group">
+                                            <label>Marka *</label>
+                                            <select
+                                                value={selectedBrandId}
+                                                disabled={form.custom_device}
+                                                required={!form.custom_device}
+                                                onChange={e => {
+                                                    setSelectedBrandId(e.target.value);
+                                                    updateField('item_id', '');
+                                                }}
+                                            >
+                                                <option value="">Wybierz markę</option>
+                                                {catalogBrands.map(brand => (
+                                                    <option key={brand.id} value={brand.id}>{brand.brand_name}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        <div className="form-group">
+                                            <label>Urządzenie *</label>
+                                            <select
+                                                value={form.item_id}
+                                                disabled={form.custom_device || !selectedBrandId}
+                                                required={!form.custom_device}
+                                                onChange={e => updateField('item_id', e.target.value)}
+                                            >
+                                                <option value="">{selectedBrandId ? 'Wybierz urządzenie' : 'Najpierw wybierz markę'}</option>
+                                                {brandItems.map(item => (
+                                                    <option key={item.id} value={item.id}>
+                                                        {item.item_name}{item.model_number ? ` (${item.model_number})` : ''}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        <label className="serial-unavailable form-field-full">
+                                            <input
+                                                type="checkbox"
+                                                checked={form.custom_device}
+                                                onChange={e => {
+                                                    updateField('custom_device', e.target.checked);
+                                                    updateField('item_id', '');
+                                                    setSelectedBrandId('');
+                                                }}
+                                            />
+                                            Nie ma mojego urządzenia na liście
+                                        </label>
+                                        {form.custom_device && (
+                                            <>
+                                                <div className="form-group">
+                                                    <label>Producent *</label>
+                                                    <input value={form.manufacturer} onChange={e => updateField('manufacturer', e.target.value)} placeholder="np. Bosch" required />
+                                                </div>
+                                                <div className="form-group">
+                                                    <label>Produkt / model *</label>
+                                                    <input value={form.product_model} onChange={e => updateField('product_model', e.target.value)} placeholder="np. Serie 6 WGG244Z" required />
+                                                </div>
+                                            </>
+                                        )}
+                                        <div className="form-group">
+                                            <label>Numer seryjny {!form.serial_number_unavailable && '*'}</label>
+                                            <input value={form.serial_number} onChange={e => updateField('serial_number', e.target.value)} disabled={form.serial_number_unavailable} required={!form.serial_number_unavailable} />
+                                            <label className="serial-unavailable">
+                                                <input type="checkbox" checked={form.serial_number_unavailable} onChange={e => { updateField('serial_number_unavailable', e.target.checked); if (e.target.checked) updateField('serial_number', ''); }} />
+                                                Nie posiadam numeru seryjnego
+                                            </label>
+                                        </div>
                                         <div className="form-group"><label>Data zakupu *</label><input type="date" value={form.purchase_date} onChange={e => updateField('purchase_date', e.target.value)} required /></div>
                                     </div>
                                 </section>

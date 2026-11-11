@@ -1,0 +1,81 @@
+import React, { useEffect, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { Plus, Package, Tags, Warehouse as WarehouseIcon, Boxes, X, Search, Trash2, Archive, ArrowDownToLine } from 'lucide-react';
+import { getBrands, createBrand, deleteBrand, getItems, createItem, setItemActive, getWarehouses, createWarehouse, getResources, receiveStock } from '../services/inventoryService';
+import './InventoryPage.scss';
+
+export const InventoryPage = () => {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const tab = location.pathname === '/inventory/items' ? 'items' : location.pathname === '/inventory/config' ? 'config' : 'stock';
+  const [brands, setBrands] = useState([]), [items, setItems] = useState([]), [warehouses, setWarehouses] = useState([]), [resources, setResources] = useState([]);
+  const [message, setMessage] = useState('');
+  const [modal, setModal] = useState('');
+  const [search, setSearch] = useState('');
+  const [brandName, setBrandName] = useState('');
+  const emptyItem = { brand_id: '', item_type: 'device', item_name: '', model_number: '', part_number: '', purchase_price: '', sale_price: '', description: '' };
+  const [item, setItem] = useState(emptyItem);
+  const [warehouse, setWarehouse] = useState({ warehouse_name: '', warehouse_type: 'new', department: '' });
+  const [receipt, setReceipt] = useState({ item_id: '', warehouse_id: '', quantity: 1 });
+  const refresh = async () => { const [b,i,w,r] = await Promise.all([getBrands(), getItems(), getWarehouses(), getResources()]); setBrands(b); setItems(i); setWarehouses(w); setResources(r); };
+  useEffect(() => { refresh().catch(() => setMessage('Nie udało się pobrać danych magazynowych.')); }, []);
+  const run = async (action, success) => { try { await action(); await refresh(); setMessage(success); setModal(''); } catch (e) { setMessage(e.response?.data?.message || 'Operacja nie powiodła się.'); } };
+  const typeLabel = t => ({ new: 'Nowy', refurbished: 'Odnowiony', broken: 'Uszkodzony' }[t] || t);
+  const itemTypeLabel = t => ({ device: 'Urządzenie', component: 'Komponent / część', other: 'Inny' }[t] || t);
+  const filteredItems = items.filter(x => `${x.brand?.brand_name || ''} ${x.item_name || ''} ${x.model_number || ''} ${x.part_number || ''}`.toLowerCase().includes(search.toLowerCase()));
+  const filteredBrands = brands.filter(x => x.brand_name.toLowerCase().includes(search.toLowerCase()));
+  const filteredWarehouses = warehouses.filter(x => `${x.warehouse_name} ${x.department || ''} ${typeLabel(x.warehouse_type)}`.toLowerCase().includes(search.toLowerCase()));
+  const openTab = id => { navigate(id === 'items' ? '/inventory/items' : id === 'config' ? '/inventory/config' : '/inventory'); setSearch(''); setMessage(''); };
+  const closeModal = () => setModal('');
+  const modalShell = (title, children) => <div className="inventory-modal-overlay" onMouseDown={e => { if (e.target === e.currentTarget) closeModal(); }}><section className="inventory-modal" role="dialog" aria-modal="true" aria-label={title}><header className="inventory-modal__header"><h2>{title}</h2><button type="button" className="inventory-icon-button" onClick={closeModal} aria-label="Zamknij"><X size={20}/></button></header>{children}</section></div>;
+
+  return <main className="inventory-page reports-page-container">
+    <section className="inventory-hero"><div className="inventory-hero__icon"><Boxes size={27}/></div><div><h1>Gospodarka magazynowa</h1><p>Katalog produktów, marki, magazyny i przyjęcia dostaw</p></div></section>
+    <section className="inventory-content content"><div className="content__container">
+      <div className="inventory-toolbar">
+        <div className="inventory-toolbar__context">{tab === 'stock' ? 'Panel stanu magazynowego' : tab === 'items' ? 'Katalog itemów' : 'Konfiguracja serwisu'}</div>
+        {tab === 'items' && <button className="inventory-primary" onClick={()=>setModal('item')}><Plus size={17}/>Dodaj item</button>}
+        {tab === 'config' && <div className="inventory-toolbar__actions"><button className="inventory-primary" onClick={()=>setModal('brand')}><Plus size={17}/>Dodaj markę</button><button className="inventory-primary" onClick={()=>setModal('warehouse')}><Plus size={17}/>Dodaj magazyn</button></div>}
+      </div>
+      {message && <div className="inventory-message" role="status">{message}<button onClick={()=>setMessage('')} aria-label="Zamknij komunikat"><X size={16}/></button></div>}
+
+      {tab==='stock' && <>
+        <section className="inventory-panel inventory-receipt"><div className="inventory-panel__heading"><div><h2>Przyjmij dostawę</h2><p>Zwiększ stan wybranej pozycji w wybranym magazynie.</p></div><span className="inventory-heading-icon"><ArrowDownToLine size={19}/></span></div>
+          <form className="inventory-form inventory-form--inline" onSubmit={e=>{e.preventDefault();run(()=>receiveStock(receipt),'Dostawa została przyjęta.');}}>
+            <label>Pozycja<select required value={receipt.item_id} onChange={e=>setReceipt({...receipt,item_id:e.target.value})}><option value="">Wybierz item</option>{items.filter(x=>x.is_active).map(x=><option key={x.id} value={x.id}>{x.brand?.brand_name} – {x.item_name} {x.part_number?`(${x.part_number})`:''}</option>)}</select></label>
+            <label>Magazyn<select required value={receipt.warehouse_id} onChange={e=>setReceipt({...receipt,warehouse_id:e.target.value})}><option value="">Wybierz magazyn</option>{warehouses.map(w=><option key={w.id} value={w.id}>{w.warehouse_name} ({typeLabel(w.warehouse_type)})</option>)}</select></label>
+            <label className="quantity-field">Ilość<input type="number" min="1" step="1" required value={receipt.quantity} onChange={e=>setReceipt({...receipt,quantity:e.target.value})}/></label><button className="inventory-primary" type="submit">Przyjmij dostawę</button>
+          </form>
+        </section>
+        <section className="inventory-panel"><div className="inventory-panel__heading"><div><h2>Aktualne stany magazynowe</h2><p>Podgląd ilości poszczególnych pozycji we wszystkich magazynach.</p></div><span className="inventory-count">{resources.length} pozycji</span></div>
+          <div className="inventory-table-wrap"><table className="inventory-table"><thead><tr><th>Marka / item</th><th>Typ</th><th>Magazyn</th><th>Rodzaj magazynu</th><th className="numeric">Ilość</th></tr></thead><tbody>{resources.map(r=><tr key={r.id}><td><strong>{r.item?.item_name || '—'}</strong><small>{r.item?.brand?.brand_name || 'Bez marki'}{r.item?.part_number?` · ${r.item.part_number}`:''}</small></td><td>{itemTypeLabel(r.item?.item_type)}</td><td>{r.warehouse?.warehouse_name}</td><td><span className={`inventory-pill inventory-pill--${r.warehouse?.warehouse_type}`}>{typeLabel(r.warehouse?.warehouse_type)}</span></td><td className="numeric"><strong>{r.quantity}</strong></td></tr>)}{!resources.length&&<tr><td colSpan="5" className="inventory-empty">Brak pozycji magazynowych.</td></tr>}</tbody></table></div>
+        </section>
+      </>}
+
+      {tab==='items' && <section className="inventory-panel"><div className="inventory-panel__heading"><div><h2>Katalog itemów</h2><p>Urządzenia, komponenty i części obsługiwane przez serwis.</p></div><span className="inventory-count">{items.length} pozycji</span></div><div className="inventory-search"><Search size={17}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Szukaj po marce, nazwie, modelu lub P/N..."/></div>
+        <div className="inventory-table-wrap"><table className="inventory-table"><thead><tr><th>Marka</th><th>Nazwa</th><th>Typ</th><th>Model / P/N</th><th className="numeric">Cena zakupu</th><th className="numeric">Cena sprzedaży</th><th>Status</th><th></th></tr></thead><tbody>{filteredItems.map(x=><tr key={x.id}><td>{x.brand?.brand_name || '—'}</td><td><strong>{x.item_name}</strong>{x.description&&<small>{x.description}</small>}</td><td>{itemTypeLabel(x.item_type)}</td><td>{x.model_number || x.part_number || '—'}</td><td className="numeric">{x.purchase_price == null?'—':`${x.purchase_price} zł`}</td><td className="numeric">{x.sale_price == null?'—':`${x.sale_price} zł`}</td><td><span className={`inventory-pill ${x.is_active?'inventory-pill--active':'inventory-pill--inactive'}`}>{x.is_active?'Aktywny':'Archiwalny'}</span></td><td><button className="inventory-table-action" onClick={()=>run(()=>setItemActive(x.id,!x.is_active),'Zmieniono status pozycji.')}>{x.is_active?'Dezaktywuj':'Aktywuj'}</button></td></tr>)}{!filteredItems.length&&<tr><td colSpan="8" className="inventory-empty">Nie znaleziono pozycji.</td></tr>}</tbody></table></div>
+      </section>}
+
+      {tab==='config' && <section className="inventory-panel"><div className="inventory-panel__heading"><div><h2>Marki</h2><p>Lista producentów, których urządzenia i części obsługuje serwis.</p></div><span className="inventory-count">{brands.length} marek</span></div><div className="inventory-search"><Search size={17}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Szukaj marki..."/></div>
+        <div className="inventory-table-wrap"><table className="inventory-table"><thead><tr><th>Nazwa marki</th><th>Liczba pozycji w katalogu</th><th></th></tr></thead><tbody>{filteredBrands.map(b=><tr key={b.id}><td><strong>{b.brand_name}</strong></td><td>{items.filter(i=>i.brand_id===b.id).length}</td><td className="table-actions"><button className="inventory-table-action inventory-table-action--danger" onClick={()=>run(()=>deleteBrand(b.id),'Marka została usunięta.')}><Trash2 size={14}/>Usuń</button></td></tr>)}{!filteredBrands.length&&<tr><td colSpan="3" className="inventory-empty">Brak marek do wyświetlenia.</td></tr>}</tbody></table></div>
+      </section>}
+
+      {tab==='config' && <section className="inventory-panel"><div className="inventory-panel__heading"><div><h2>Magazyny</h2><p>Zarządzanie lokalizacjami i rodzajami przechowywanych zasobów.</p></div><span className="inventory-count">{warehouses.length} magazynów</span></div><div className="inventory-search"><Search size={17}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Szukaj magazynu lub lokalizacji..."/></div>
+        <div className="inventory-table-wrap"><table className="inventory-table"><thead><tr><th>Nazwa magazynu</th><th>Typ</th><th>Dział / lokalizacja</th><th className="numeric">Liczba pozycji</th></tr></thead><tbody>{filteredWarehouses.map(w=><tr key={w.id}><td><strong>{w.warehouse_name}</strong></td><td><span className={`inventory-pill inventory-pill--${w.warehouse_type}`}>{typeLabel(w.warehouse_type)}</span></td><td>{w.department || '—'}</td><td className="numeric">{resources.filter(r=>r.warehouse_id===w.id).length}</td></tr>)}{!filteredWarehouses.length&&<tr><td colSpan="4" className="inventory-empty">Brak magazynów do wyświetlenia.</td></tr>}</tbody></table></div>
+      </section>}
+    </div></section>
+
+    {modal==='item' && modalShell('Dodaj pozycję do katalogu',<form className="inventory-modal-form" onSubmit={e=>{e.preventDefault();run(()=>createItem(item),'Pozycja została dodana.').then(()=>setItem(emptyItem));}}><div className="inventory-modal-grid">
+      <label>Marka<select required value={item.brand_id} onChange={e=>setItem({...item,brand_id:e.target.value})}><option value="">Wybierz markę</option>{brands.map(b=><option key={b.id} value={b.id}>{b.brand_name}</option>)}</select></label>
+      <label>Typ<select value={item.item_type} onChange={e=>setItem({...item,item_type:e.target.value})}><option value="device">Urządzenie</option><option value="component">Komponent / część</option><option value="other">Inny</option></select></label>
+      <label>Nazwa pozycji *<input required value={item.item_name} onChange={e=>setItem({...item,item_name:e.target.value})} placeholder="np. Pralka Serie 6"/></label>
+      <label>Model<input value={item.model_number} onChange={e=>setItem({...item,model_number:e.target.value})} placeholder="np. WAN2427KPL"/></label>
+      <label>Numer katalogowy / P/N<input value={item.part_number} onChange={e=>setItem({...item,part_number:e.target.value})}/></label>
+      <label>Cena zakupu (PLN)<input type="number" min="0" step="0.01" value={item.purchase_price} onChange={e=>setItem({...item,purchase_price:e.target.value})}/></label>
+      <label>Cena sprzedaży (PLN)<input type="number" min="0" step="0.01" value={item.sale_price} onChange={e=>setItem({...item,sale_price:e.target.value})}/></label>
+      <label className="inventory-modal-grid__wide">Opis<textarea rows="3" value={item.description} onChange={e=>setItem({...item,description:e.target.value})}/></label>
+    </div><footer className="inventory-modal-actions"><button type="button" className="inventory-secondary" onClick={closeModal}>Anuluj</button><button className="inventory-primary" type="submit">Dodaj do katalogu</button></footer></form>)}
+    {modal==='brand' && modalShell('Dodaj markę',<form className="inventory-modal-form" onSubmit={e=>{e.preventDefault();run(()=>createBrand({brand_name:brandName}),'Marka została dodana.').then(()=>setBrandName(''));}}><label>Nazwa marki<input required autoFocus value={brandName} onChange={e=>setBrandName(e.target.value)} placeholder="np. Bosch"/></label><footer className="inventory-modal-actions"><button type="button" className="inventory-secondary" onClick={closeModal}>Anuluj</button><button className="inventory-primary" type="submit">Dodaj markę</button></footer></form>)}
+    {modal==='warehouse' && modalShell('Dodaj magazyn',<form className="inventory-modal-form" onSubmit={e=>{e.preventDefault();run(()=>createWarehouse(warehouse),'Magazyn został dodany.').then(()=>setWarehouse({warehouse_name:'',warehouse_type:'new',department:''}));}}><div className="inventory-modal-grid"><label>Nazwa magazynu<input required autoFocus value={warehouse.warehouse_name} onChange={e=>setWarehouse({...warehouse,warehouse_name:e.target.value})} placeholder="np. Magazyn główny"/></label><label>Typ magazynu<select value={warehouse.warehouse_type} onChange={e=>setWarehouse({...warehouse,warehouse_type:e.target.value})}><option value="new">Nowy</option><option value="refurbished">Odnowiony</option><option value="broken">Uszkodzony</option></select></label><label className="inventory-modal-grid__wide">Dział / lokalizacja (opcjonalnie)<input value={warehouse.department} onChange={e=>setWarehouse({...warehouse,department:e.target.value})} placeholder="np. Serwis AGD"/></label></div><footer className="inventory-modal-actions"><button type="button" className="inventory-secondary" onClick={closeModal}>Anuluj</button><button className="inventory-primary" type="submit">Dodaj magazyn</button></footer></form>)}
+  </main>;
+};

@@ -3,7 +3,10 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node index.js",
+    "start:local": "node index.js",
+    "start:azure": "node index.js",
+    "seed:local": "node seed-local.js"
   },
   "keywords": [],
   "author": "",
@@ -17,6 +20,7 @@
     "mysql": "^2.18.1",
     "mysql2": "^3.14.1",
     "sequelize": "^6.37.7",
-    "tedious": "^20.3.8"
+    "tedious": "^20.3.8",
+    "sqlite3": "^5.1.7"
   }
 }

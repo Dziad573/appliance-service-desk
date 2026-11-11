@@ -1,11 +1,11 @@
 const express = require('express');
 const cors = require('cors');
 const app = express();
-const port = 3001;
+const port = Number(process.env.PORT || 3001);
 
 app.use(cors({ origin: 'http://localhost:3000', credentials: true }));
 
-const { sequelize, User, Report, Comment, ReportStatusHistory } = require('./models');
+const { sequelize, User, Report, Comment, ReportStatusHistory, Brand, Item, Warehouse, Resource } = require('./models');
 const { Op } = require('sequelize');
 
 app.use(express.json());
@@ -75,12 +75,22 @@ app.post('/reports', async (req, res) => {
             serial_number_unavailable = false,
             manufacturer,
             product_model,
+            item_id,
+            custom_device = false,
             purchase_date,
             issue_description,
             complaint_type
         } = req.body;
 
-        const device_name = product_model || req.body.device_name;
+        let selectedItem = null;
+        if (!custom_device) {
+            if (!item_id) return res.status(400).json({ message: 'Wybierz urządzenie z katalogu lub zaznacz urządzenie spoza katalogu.' });
+            selectedItem = await Item.findByPk(Number(item_id), { include: [{ model: Brand, as: 'brand' }] });
+            if (!selectedItem || !selectedItem.is_active || selectedItem.item_type !== 'device') return res.status(400).json({ message: 'Wybrane urządzenie nie istnieje lub nie jest dostępne.' });
+        }
+        const finalManufacturer = custom_device ? manufacturer : selectedItem.brand.brand_name;
+        const finalModel = custom_device ? product_model : (selectedItem.model_number || selectedItem.item_name);
+        const device_name = finalModel || req.body.device_name;
 
         const newReport = await Report.create({
             user_id,
@@ -92,8 +102,10 @@ app.post('/reports', async (req, res) => {
             customer_language,
             serial_number: serial_number_unavailable ? null : serial_number,
             serial_number_unavailable,
-            manufacturer,
-            product_model,
+            manufacturer: finalManufacturer,
+            product_model: finalModel,
+            item_id: custom_device ? null : selectedItem.id,
+            custom_device,
             purchase_date,
             issue_description,
             complaint_type,
@@ -449,8 +461,99 @@ app.post('/reports/:reportId/comments', async (req, res) => {
     }
 });
 
-app.listen(port, () => {
-    console.log(`Backend works at http://localhost:${port}`);
+
+// ===== KATALOG I MAGAZYN =====
+app.get('/inventory/brands', async (req, res) => {
+  try { res.json(await Brand.findAll({ order: [['brand_name', 'ASC']] })); }
+  catch (e) { console.error(e); res.status(500).json({ message: 'Nie udało się pobrać marek.' }); }
 });
+app.post('/inventory/brands', async (req, res) => {
+  try {
+    const brand_name = String(req.body.brand_name || '').trim();
+    if (!brand_name) return res.status(400).json({ message: 'Podaj nazwę marki.' });
+    res.status(201).json(await Brand.create({ brand_name }));
+  } catch (e) { res.status(400).json({ message: 'Marka już istnieje lub dane są nieprawidłowe.' }); }
+});
+app.delete('/inventory/brands/:id', async (req, res) => {
+  try {
+    const brand = await Brand.findByPk(Number(req.params.id));
+    if (!brand) return res.status(404).json({ message: 'Nie znaleziono marki.' });
+    const linkedItems = await Item.count({ where: { brand_id: brand.id } });
+    if (linkedItems > 0) return res.status(409).json({ message: 'Nie można usunąć marki, do której przypisano itemy. Najpierw usuń lub przenieś powiązane pozycje.' });
+    await brand.destroy();
+    res.json({ message: 'Marka została usunięta.' });
+  } catch (e) { res.status(500).json({ message: 'Nie udało się usunąć marki.' }); }
+});
+app.get('/inventory/items', async (req, res) => {
+  try {
+    const where = req.query.activeOnly === 'true' ? { is_active: true } : {};
+    res.json(await Item.findAll({ where, include: [{ model: Brand, as: 'brand', attributes: ['id', 'brand_name'] }], order: [['item_name', 'ASC']] }));
+  } catch (e) { console.error(e); res.status(500).json({ message: 'Nie udało się pobrać katalogu.' }); }
+});
+app.post('/inventory/items', async (req, res) => {
+  try {
+    const { brand_id, item_type, item_name, model_number, part_number, purchase_price, sale_price, description } = req.body;
+    if (!brand_id || !['device', 'component', 'other'].includes(item_type) || !String(item_name || '').trim()) return res.status(400).json({ message: 'Uzupełnij markę, typ i nazwę pozycji.' });
+    res.status(201).json(await Item.create({ brand_id: Number(brand_id), item_type, item_name: String(item_name).trim(), model_number: model_number || null, part_number: part_number || null, purchase_price: purchase_price === '' ? null : purchase_price, sale_price: sale_price === '' ? null : sale_price, description: description || null }));
+  } catch (e) { console.error(e); res.status(400).json({ message: 'Nie udało się dodać pozycji. Sprawdź dane i wybraną markę.' }); }
+});
+app.patch('/inventory/items/:id', async (req, res) => {
+  try {
+    const item = await Item.findByPk(Number(req.params.id));
+    if (!item) return res.status(404).json({ message: 'Nie znaleziono pozycji.' });
+    await item.update({ is_active: req.body.is_active === false ? false : true });
+    res.json(item);
+  } catch (e) { res.status(500).json({ message: 'Nie udało się zmienić pozycji.' }); }
+});
+app.get('/inventory/warehouses', async (req, res) => {
+  try { res.json(await Warehouse.findAll({ order: [['warehouse_name', 'ASC']] })); }
+  catch (e) { res.status(500).json({ message: 'Nie udało się pobrać magazynów.' }); }
+});
+app.post('/inventory/warehouses', async (req, res) => {
+  try {
+    const { warehouse_name, warehouse_type, department } = req.body;
+    if (!String(warehouse_name || '').trim() || !['new', 'refurbished', 'broken'].includes(warehouse_type)) return res.status(400).json({ message: 'Podaj nazwę i prawidłowy typ magazynu.' });
+    res.status(201).json(await Warehouse.create({ warehouse_name: warehouse_name.trim(), warehouse_type, department: department || null }));
+  } catch (e) { res.status(400).json({ message: 'Nie udało się dodać magazynu.' }); }
+});
+app.get('/inventory/resources', async (req, res) => {
+  try {
+    res.json(await Resource.findAll({ include: [{ model: Item, as: 'item', include: [{ model: Brand, as: 'brand', attributes: ['brand_name'] }] }, { model: Warehouse, as: 'warehouse' }], order: [['id', 'DESC']] }));
+  } catch (e) { console.error(e); res.status(500).json({ message: 'Nie udało się pobrać stanów magazynowych.' }); }
+});
+// Przyjęcie dostawy: zwiększa stan istniejącej pozycji albo tworzy nowy rekord zasobu.
+app.post('/inventory/receipts', async (req, res) => {
+  try {
+    const item_id = Number(req.body.item_id), warehouse_id = Number(req.body.warehouse_id), quantity = Number(req.body.quantity);
+    if (!Number.isInteger(item_id) || !Number.isInteger(warehouse_id) || !Number.isInteger(quantity) || quantity <= 0) return res.status(400).json({ message: 'Podaj pozycję, magazyn i ilość większą od zera.' });
+    const [resource] = await Resource.findOrCreate({ where: { item_id, warehouse_id }, defaults: { item_id, warehouse_id, quantity: 0 } });
+    await resource.increment('quantity', { by: quantity });
+    await resource.reload();
+    res.status(201).json(resource);
+  } catch (e) { console.error(e); res.status(400).json({ message: 'Nie udało się przyjąć dostawy.' }); }
+});
+
+async function startServer() {
+    try {
+        await sequelize.authenticate();
+        console.log('[DB] Connection established.');
+
+        // Local SQLite can create its own schema. Production Azure SQL is changed only
+        // through the reviewed SQL migration in database/.
+        if (sequelize.getDialect() === 'sqlite') {
+            await sequelize.sync();
+            console.log('[DB] Local SQLite schema is ready.');
+        }
+
+        app.listen(port, () => {
+            console.log(`Backend works at http://localhost:${port}`);
+        });
+    } catch (error) {
+        console.error('[DB] Could not initialize database:', error.message);
+        process.exit(1);
+    }
+}
+
+startServer();
 
 
