@@ -82,6 +82,36 @@ app.post('/reports', async (req, res) => {
             complaint_type
         } = req.body;
 
+        // SQL Server does not accept an empty string as a DATE value.
+        // Normalize the optional purchase date before passing it to Sequelize.
+        const normalizedPurchaseDate = (() => {
+            if (purchase_date === undefined || purchase_date === null || String(purchase_date).trim() === '') {
+                return null;
+            }
+
+            const value = String(purchase_date).trim();
+            if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+                const [year, month, day] = value.split('-').map(Number);
+                const parsed = new Date(Date.UTC(year, month - 1, day));
+                if (parsed.getUTCFullYear() === year && parsed.getUTCMonth() === month - 1 && parsed.getUTCDate() === day) {
+                    return value;
+                }
+            }
+
+            // Also accept common Polish date notation if a client sends it.
+            const polishDate = value.match(/^(\d{2})[.\/-](\d{2})[.\/-](\d{4})$/);
+            if (polishDate) {
+                const [, day, month, year] = polishDate;
+                const normalized = `${year}-${month}-${day}`;
+                const parsed = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)));
+                if (parsed.getUTCFullYear() === Number(year) && parsed.getUTCMonth() === Number(month) - 1 && parsed.getUTCDate() === Number(day)) {
+                    return normalized;
+                }
+            }
+
+            throw new Error(`Nieprawidłowy format daty zakupu: ${value}`);
+        })();
+
         let selectedItem = null;
         if (!custom_device) {
             if (!item_id) return res.status(400).json({ message: 'Wybierz urządzenie z katalogu lub zaznacz urządzenie spoza katalogu.' });
@@ -109,7 +139,10 @@ app.post('/reports', async (req, res) => {
             purchase_date,
             issue_description,
             complaint_type,
-            status: 'Nowe'
+            status: 'Nowe',
+            created_at: sequelize.getDialect() === 'mssql'
+                ? sequelize.literal('GETDATE()')
+                : new Date()
         });
 
         res.status(201).json(newReport);
