@@ -1,4 +1,3 @@
-
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
@@ -16,7 +15,9 @@ import {
     X,
     Package,
     Plus,
-    RotateCcw
+    RotateCcw,
+    DollarSign,
+    Check
 } from 'lucide-react';
 
 import useStore from '../store/useStore';
@@ -27,6 +28,291 @@ import { getReportParts, issueReportPart, returnReportPart, getItems, getResourc
 import ContactModal from '../components/ContactModal/ContactModal';
 
 import './ReportDetailsPage.scss';
+
+// --- KOMPONENT WYCENY NAPRAWY ---
+const RepairCostSection = ({ report, isAdmin, onSavePricing, onAcceptPrice, stockItems, stockResources }) => {
+    const complaintType = report.complaint_type?.toLowerCase() || '';
+    const isWarrantyOrComplaint = complaintType === 'gwarancyjna' || complaintType === 'reklamacja' || complaintType === 'gwarancja';
+
+    const [parts, setParts] = useState(report.parts || []);
+    const [laborCost, setLaborCost] = useState(report.labor_cost || 0);
+
+    const [selectedItemId, setSelectedItemId] = useState('');
+    const [customPrice, setCustomPrice] = useState(0);
+    const [saveStatus, setSaveStatus] = useState('idle'); // 'idle' | 'saving' | 'success' | 'error'
+
+    useEffect(() => {
+        if (report.parts) setParts(report.parts);
+        if (report.labor_cost !== undefined) setLaborCost(report.labor_cost);
+    }, [report.parts, report.labor_cost]);
+
+    const handleItemSelect = (e) => {
+        const id = e.target.value;
+        setSelectedItemId(id);
+        const item = stockItems.find(i => String(i.id) === String(id));
+        if (item) {
+            const price = item.sale_price !== undefined ? item.sale_price : (item.basePrice !== undefined ? item.basePrice : (item.price || 0));
+            setCustomPrice(price);
+        }
+    };
+
+    const handlePriceChange = (e) => {
+        let val = Number(e.target.value);
+        const selectedItem = stockItems.find(i => String(i.id) === String(selectedItemId));
+        const maxPrice = selectedItem ? (selectedItem.sale_price !== undefined ? selectedItem.sale_price : (selectedItem.basePrice !== undefined ? selectedItem.basePrice : (selectedItem.price || 0))) : 0;
+
+        if (maxPrice > 0 && val > maxPrice) val = maxPrice;
+        if (val < 0) val = 0;
+
+        setCustomPrice(val);
+    };
+
+    const handleAddPart = () => {
+        if (!selectedItemId) return;
+        const item = stockItems.find(i => String(i.id) === String(selectedItemId));
+        if (item) {
+            const itemName = item.item_name || item.name || 'Część bez nazwy';
+            setParts([...parts, { ...item, name: itemName, assignedPrice: Number(customPrice) }]);
+            setSelectedItemId('');
+            setCustomPrice(0);
+        }
+    };
+
+    const handleRemovePart = (index) => {
+        setParts(parts.filter((_, i) => i !== index));
+    };
+
+    const handleSaveClick = async () => {
+        setSaveStatus('saving');
+        try {
+            await onSavePricing({ parts, labor_cost: Number(laborCost), total_cost: finalTotalCost });
+            setSaveStatus('success');
+            setTimeout(() => setSaveStatus('idle'), 3000);
+        } catch (error) {
+            setSaveStatus('error');
+            setTimeout(() => setSaveStatus('idle'), 3000);
+        }
+    };
+
+    const partsTotal = parts.reduce((sum, p) => sum + Number(p.assignedPrice || p.price || 0), 0);
+    const rawTotalCost = Number(laborCost) + partsTotal;
+    const finalTotalCost = isWarrantyOrComplaint ? 0 : rawTotalCost;
+
+    return (
+        <section className="details-card pricing-card">
+            <div className="details-card__header">
+                <div className="details-card__icon"><DollarSign size={19} /></div>
+                <div>
+                    <h2>Wycena naprawy</h2>
+                    <p>Koszty związane z realizacją zgłoszenia</p>
+                </div>
+            </div>
+
+            {isWarrantyOrComplaint && (
+                <div className="pricing-warranty-notice">
+                    ℹ️ Zgłoszenie ma typ: <strong>{report.complaint_type}</strong>. Wszystkie koszty (części i robocizna) są objęte gwarancją – dla klienta wynoszą 0 zł.
+                </div>
+            )}
+
+            {isAdmin ? (
+                <div className="admin-pricing">
+                    <div className="admin-pricing__parts-list">
+                        <h4>Lista wykorzystanych części do wyceny:</h4>
+                        {parts.length === 0 ? <p className="text-muted text-sm">Brak przypisanych części w wycenie.</p> : (
+                            <ul>
+                                {parts.map((p, idx) => (
+                                    <li key={idx}>
+                                        <span>{p.name || p.item_name}</span>
+                                        <div className="part-price-actions">
+                                            {isWarrantyOrComplaint ? (
+                                                <>
+                                                    <del style={{ color: '#9ca3af', fontSize: '0.8rem' }}>{p.assignedPrice || p.price || 0} zł</del>
+                                                    <strong style={{ color: 'var(--success-color)' }}>Gwarancja</strong>
+                                                </>
+                                            ) : (
+                                                <strong>{p.assignedPrice || p.price || 0} zł</strong>
+                                            )}
+                                            <button type="button" onClick={() => handleRemovePart(idx)} title="Usuń część"><X size={14} /></button>
+                                        </div>
+                                    </li>
+                                ))}
+                            </ul>
+                        )}
+                    </div>
+
+                    <div className="admin-pricing__add-part">
+                        <h4>Dodaj element do wyceny z bazy (komponent zgodny z marką urządzenia):</h4>
+                        <div className="add-part-form">
+                            <select value={selectedItemId} onChange={handleItemSelect}>
+                                <option value="">-- Wybierz część z bazy --</option>
+                                {stockItems
+                                    .filter(item => {
+                                        const reportBrand = (report.manufacturer || '').trim().toLowerCase();
+                                        const itemBrand = (item.brand?.brand_name || item.brand_name || '').trim().toLowerCase();
+                                        const isBrandMatching = reportBrand && itemBrand && reportBrand === itemBrand;
+                                        const isBroken = item.status === 'uszkodzony' || item.warehouse_type === 'broken';
+
+                                        return isBrandMatching && !isBroken;
+                                    })
+                                    .map(item => {
+                                        const itemName = item.item_name || item.name || 'Część';
+                                        const itemPrice = item.sale_price !== undefined ? item.sale_price : (item.basePrice !== undefined ? item.basePrice : (item.price || 0));
+                                        return (
+                                            <option key={item.id} value={item.id}>
+                                                {item.brand?.brand_name ? `${item.brand.brand_name} — ` : ''}{itemName} (Baza: {itemPrice} zł)
+                                            </option>
+                                        );
+                                    })
+                                }
+                            </select>
+
+                            <div className="price-input" title="Ustal cenę specjalną">
+                                <label>Cena:</label>
+                                <input
+                                    type="number"
+                                    value={customPrice}
+                                    onChange={handlePriceChange}
+                                    disabled={!selectedItemId}
+                                />
+                                <span>zł</span>
+                            </div>
+
+                            <button type="button" onClick={handleAddPart} disabled={!selectedItemId} className="report-action-button report-action-button--primary">
+                                <Plus size={16} /> Dodaj
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="admin-pricing__labor">
+                        <label>Wartość robocizny:</label>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            {isWarrantyOrComplaint && <del style={{ color: '#9ca3af', fontSize: '0.85rem' }}>{laborCost} zł</del>}
+                            <input
+                                type="number"
+                                min="0"
+                                value={laborCost}
+                                onChange={e => setLaborCost(e.target.value)}
+                            />
+                            <span>zł {isWarrantyOrComplaint && <span style={{ color: 'var(--success-color)', fontWeight: 600, marginLeft: '4px' }}>(Gwarancja)</span>}</span>
+                        </div>
+                    </div>
+
+                    <div className="admin-pricing__save">
+                        <div className="admin-pricing__summary">
+                            Suma całkowita dla klienta:
+                            {isWarrantyOrComplaint ? (
+                                <>
+                                    <del style={{ marginLeft: '10px', color: '#9ca3af', fontSize: '1.05rem' }}>{rawTotalCost.toFixed(2)} zł</del>
+                                    <strong style={{ marginLeft: '8px' }}>0.00 zł (Gwarancja)</strong>
+                                </>
+                            ) : (
+                                <strong>{finalTotalCost.toFixed(2)} zł</strong>
+                            )}
+                        </div>
+
+                        <div className="admin-pricing__actions-wrapper">
+                            {saveStatus === 'success' && (
+                                <span className="pricing-save-status success" style={{ color: '#16a34a', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                    <Check size={16} strokeWidth={3} /> Zapisano wycenę
+                                </span>
+                            )}
+                            {saveStatus === 'error' && (
+                                <span className="pricing-save-status error" style={{ color: '#dc2626', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                    <X size={16} /> Błąd zapisu
+                                </span>
+                            )}
+
+                            <button
+                                type="button"
+                                onClick={handleSaveClick}
+                                disabled={saveStatus === 'saving'}
+                                className="report-action-button report-action-button--primary"
+                            >
+                                {saveStatus === 'saving' ? 'Zapisywanie...' : 'Zapisz wycenę'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            ) : (
+                <div className="user-pricing">
+                    <div className="admin-pricing__parts-list" style={{ marginBottom: '20px' }}>
+                        <h4>Wycenione elementy i części:</h4>
+                        {parts.length === 0 && Number(laborCost) === 0 ? (
+                            <p className="text-muted text-sm">Brak szczegółów wyceny od serwisu.</p>
+                        ) : (
+                            <ul>
+                                {parts.map((p, idx) => (
+                                    <li key={idx} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', background: 'var(--bg-white)', border: '1px solid var(--border-color)', borderRadius: '6px', marginBottom: '6px', fontSize: '0.85rem' }}>
+                                        <span>{p.name || p.item_name}</span>
+                                        <div>
+                                            {isWarrantyOrComplaint ? (
+                                                <>
+                                                    <del style={{ color: '#9ca3af', marginRight: '8px' }}>{p.assignedPrice || p.price || 0} zł</del>
+                                                    <strong style={{ color: 'var(--success-color)' }}>Gwarancja</strong>
+                                                </>
+                                            ) : (
+                                                <strong>{p.assignedPrice || p.price || 0} zł</strong>
+                                            )}
+                                        </div>
+                                    </li>
+                                ))}
+                                {Number(laborCost) > 0 && (
+                                    <li style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', background: 'var(--bg-white)', border: '1px solid var(--border-color)', borderRadius: '6px', fontSize: '0.85rem' }}>
+                                        <span>Robocizna serwisowa</span>
+                                        <div>
+                                            {isWarrantyOrComplaint ? (
+                                                <>
+                                                    <del style={{ color: '#9ca3af', marginRight: '8px' }}>{laborCost} zł</del>
+                                                    <strong style={{ color: 'var(--success-color)' }}>Gwarancja</strong>
+                                                </>
+                                            ) : (
+                                                <strong>{Number(laborCost).toFixed(2)} zł</strong>
+                                            )}
+                                        </div>
+                                    </li>
+                                )}
+                            </ul>
+                        )}
+                    </div>
+
+                    <div className="user-pricing__total">
+                        <span>Całkowity koszt do zapłaty:</span>
+                        {isWarrantyOrComplaint ? (
+                            <div style={{ textAlign: 'right' }}>
+                                <del style={{ color: '#9ca3af', fontSize: '1.2rem', marginRight: '12px' }}>{rawTotalCost.toFixed(2)} zł</del>
+                                <strong>0.00 zł (Gwarancja)</strong>
+                            </div>
+                        ) : (
+                            <strong>{finalTotalCost.toFixed(2)} zł</strong>
+                        )}
+                    </div>
+
+                    {!isWarrantyOrComplaint && report.price_accepted === null && (
+                        <div className="user-pricing__actions" style={{ marginTop: '16px' }}>
+                            <p><strong>Wymagana decyzja:</strong> Aby serwis mógł przejść do kolejnego etapu naprawy, musisz zaakceptować powyższą wycenę.</p>
+                            <div className="actions-row" style={{ display: 'flex', gap: '12px', marginTop: '10px' }}>
+                                <button onClick={() => onAcceptPrice(true)} className="btn-accept" style={{ background: '#16a34a', color: 'white', padding: '8px 16px', borderRadius: '6px', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}><Check size={18} /> Akceptuję</button>
+                                <button onClick={() => onAcceptPrice(false)} className="btn-reject" style={{ background: '#dc2626', color: 'white', padding: '8px 16px', borderRadius: '6px', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}><X size={18} /> Odrzucam</button>
+                            </div>
+                        </div>
+                    )}
+
+                    {!isWarrantyOrComplaint && report.price_accepted === true && (
+                        <div className="pricing-status-notice success" style={{ marginTop: '12px', padding: '10px', background: '#dcfce7', color: '#166534', borderRadius: '6px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <Check size={16} /> Wycena naprawy została przez Ciebie zaakceptowana.
+                        </div>
+                    )}
+                    {!isWarrantyOrComplaint && report.price_accepted === false && (
+                        <div className="pricing-status-notice error" style={{ marginTop: '12px', padding: '10px', background: '#fee2e2', color: '#991b1b', borderRadius: '6px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <X size={16} /> Odrzuciłeś wycenę. Zgłoszenie zostało wstrzymane.
+                        </div>
+                    )}
+                </div>
+            )}
+        </section>
+    );
+};
+// --- KONIEC KOMPONENTU WYCENY ---
 
 export const ReportDetailsPage = () => {
     const { id } = useParams();
@@ -89,6 +375,22 @@ export const ReportDetailsPage = () => {
                 if (!isAdmin && String(data.user_id) !== String(user?.id)) {
                     setError('Nie masz uprawnień do wyświetlenia tej reklamacji.');
                     return;
+                }
+
+                // Obsługa zapisu/odczytu wyceny i akceptacji z localStorage (dla kompatybilności)
+                const savedPricing = localStorage.getItem(`report_pricing_${id}`);
+                if (savedPricing) {
+                    const parsed = JSON.parse(savedPricing);
+                    data.parts = parsed.parts;
+                    data.labor_cost = parsed.labor_cost;
+                    data.total_cost = parsed.total_cost;
+                }
+
+                const savedAcceptance = localStorage.getItem(`report_accepted_${id}`);
+                if (savedAcceptance !== null) {
+                    data.price_accepted = JSON.parse(savedAcceptance);
+                } else if (data.price_accepted === undefined) {
+                    data.price_accepted = null;
                 }
 
                 setReport(data);
@@ -191,7 +493,6 @@ export const ReportDetailsPage = () => {
     };
     useEffect(() => { loadReportParts(); }, [report?.id, isAdmin]);
 
-
     const handleStatusChange = async (nextStatus) => {
         if (!isAdmin || statusBusy) return;
         try {
@@ -268,6 +569,34 @@ export const ReportDetailsPage = () => {
         finally { setPartsBusy(false); }
     };
 
+    const handleSavePricing = async (pricingData) => {
+        try {
+            await new Promise(resolve => setTimeout(resolve, 300));
+            localStorage.setItem(`report_pricing_${id}`, JSON.stringify(pricingData));
+            localStorage.removeItem(`report_accepted_${id}`);
+
+            setReport(prev => ({
+                ...prev,
+                parts: pricingData.parts,
+                labor_cost: pricingData.labor_cost,
+                total_cost: pricingData.total_cost,
+                price_accepted: null
+            }));
+        } catch (err) {
+            console.error("Błąd zapisu wyceny", err);
+            throw err;
+        }
+    };
+
+    const handleAcceptPrice = async (accepted) => {
+        try {
+            localStorage.setItem(`report_accepted_${id}`, JSON.stringify(accepted));
+            setReport(prev => ({ ...prev, price_accepted: accepted }));
+        } catch (err) {
+            alert("Nie udało się zapisać decyzji. Spróbuj ponownie.");
+        }
+    };
+
     const selectedPartResources = stockResources.filter(resource => String(resource.item_id) === String(partForm.item_id));
 
     const currentStatusIndex = processStatuses.indexOf(report?.status);
@@ -282,6 +611,10 @@ export const ReportDetailsPage = () => {
     const canEditRepairResult = isAdmin && report?.status === 'Testy QA';
     const reachedQualityControl = currentStatusIndex >= 4 || statusHistory.some(item => item.new_status === 'Testy QA' || item.old_status === 'Testy QA' || item.new_status === 'Gotowe do wysyłki' || item.old_status === 'Gotowe do wysyłki');
     const showRepairResult = reachedQualityControl || Boolean(report?.repair_result);
+
+    const complaintType = report?.complaint_type?.toLowerCase() || '';
+    const isWarrantyOrComplaint = complaintType === 'gwarancyjna' || complaintType === 'reklamacja' || complaintType === 'gwarancja';
+    const hasPricingPartsOrLabor = report && (Number(report.labor_cost) > 0 || (report.parts && report.parts.length > 0));
 
     // Po dodaniu komentarza przewiń listę do najnowszej wiadomości
     useEffect(() => {
@@ -356,8 +689,6 @@ export const ReportDetailsPage = () => {
 
                                 <h1 className="report-details-name">{report.device_name} <ContactModal reportId={report.id} title={report.device_name} /></h1>
 
-                                
-
 
                                 <p>
                                     Szczegóły zgłoszenia reklamacyjnego
@@ -366,6 +697,49 @@ export const ReportDetailsPage = () => {
 
 
                         </div>
+
+                        {/* STATUS AKCEPTACJI WYCENY / WYMAGANE POTWIERDZENIE (Między nagłówkiem a przebiegiem) */}
+                        {!isWarrantyOrComplaint && hasPricingPartsOrLabor && (
+                            <>
+                                {isAdmin ? (
+                                    <>
+                                        {report.price_accepted === null && (
+                                            <div style={{ marginBottom: '16px', padding: '12px 16px', background: '#fef3c7', color: '#92400e', borderRadius: '8px', border: '1px solid #fde68a', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.95rem', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+                                                <Clock size={18} /> Oczekiwanie na decyzję klienta: Wycena została wysłana, trwa oczekiwanie na akceptację.
+                                            </div>
+                                        )}
+                                        {report.price_accepted === true && (
+                                            <div style={{ marginBottom: '16px', padding: '12px 16px', background: '#dcfce7', color: '#166534', borderRadius: '8px', border: '1px solid #bbf7d0', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.95rem', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+                                                <Check size={18} /> Wycena zaakceptowana: Klient zatwierdził koszty naprawy.
+                                            </div>
+                                        )}
+                                        {report.price_accepted === false && (
+                                            <div style={{ marginBottom: '16px', padding: '12px 16px', background: '#fee2e2', color: '#991b1b', borderRadius: '8px', border: '1px solid #fecaca', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.95rem', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+                                                <X size={18} /> Wycena odrzucona: Klient odrzucił koszty naprawy (zgłoszenie wstrzymane).
+                                            </div>
+                                        )}
+                                    </>
+                                ) : (
+                                    <>
+                                        {report.price_accepted === null && (
+                                            <div style={{ marginBottom: '16px', padding: '12px 16px', background: '#fef3c7', color: '#92400e', borderRadius: '8px', border: '1px solid #fde68a', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.95rem', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+                                                <Clock size={18} /> <strong>Wymagane potwierdzenie:</strong> Serwis przedstawił wycenę naprawy. Zaakceptuj lub odrzuć koszty poniżej, aby kontynuować realizację.
+                                            </div>
+                                        )}
+                                        {report.price_accepted === true && (
+                                            <div style={{ marginBottom: '16px', padding: '12px 16px', background: '#dcfce7', color: '#166534', borderRadius: '8px', border: '1px solid #bbf7d0', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.95rem', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+                                                <Check size={18} /> Wycena została przez Ciebie zaakceptowana.
+                                            </div>
+                                        )}
+                                        {report.price_accepted === false && (
+                                            <div style={{ marginBottom: '16px', padding: '12px 16px', background: '#fee2e2', color: '#991b1b', borderRadius: '8px', border: '1px solid #fecaca', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.95rem', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
+                                                <X size={18} /> Odrzuciłeś wycenę. Zgłoszenie zostało wstrzymane.
+                                            </div>
+                                        )}
+                                    </>
+                                )}
+                            </>
+                        )}
 
                         {/* Pasek postępu i sterowanie statusem */}
                         <section className="details-card report-progress-card">
@@ -408,7 +782,7 @@ export const ReportDetailsPage = () => {
                                 <button type="submit" className="report-action-button report-action-button--primary" disabled={statusBusy || !pauseReason}>Potwierdź wstrzymanie</button>
                             </form>}
                             {statusError && <p className="report-status-error">{statusError}</p>}
-                            
+
                         </section>
 
                         {/* Panel diagnozy i pobranych części */}
@@ -442,7 +816,7 @@ export const ReportDetailsPage = () => {
                                     <div className="repair-modal__header"><div><h2>Rezultat naprawy</h2><p>Opisz wykonane czynności i wynik naprawy</p></div><button type="button" onClick={() => setShowRepairResultModal(false)}><X size={20} /></button></div>
                                     <label className="quality-result-code">Kod naprawy<select value={repairCodeDraft} onChange={e => setRepairCodeDraft(e.target.value)}><option value="success">Naprawa zakończona powodzeniem</option><option value="failure">Naprawa zakończona niepowodzeniem</option></select></label>
                                     <textarea rows={6} value={repairResultDraft} onChange={e => setRepairResultDraft(e.target.value)} placeholder="Opisz wykonane czynności i rezultat naprawy..." />
-                                    {repairCodeDraft === 'failure' && report.item_id && <div className="quality-broken-option"><label><input type="checkbox" checked={addBrokenStock} onChange={e => setAddBrokenStock(e.target.checked)}/> Dodaj urządzenie do magazynu uszkodzonych</label>{addBrokenStock && <select required value={brokenWarehouseId} onChange={e => setBrokenWarehouseId(e.target.value)}><option value="">Wybierz magazyn uszkodzonych</option>{stockWarehouses.filter(w => w.warehouse_type === 'broken').map(w => <option key={w.id} value={w.id}>{w.warehouse_name}</option>)}</select>}</div>}
+                                    {repairCodeDraft === 'failure' && report.item_id && <div className="quality-broken-option"><label><input type="checkbox" checked={addBrokenStock} onChange={e => setAddBrokenStock(e.target.checked)} /> Dodaj urządzenie do magazynu uszkodzonych</label>{addBrokenStock && <select required value={brokenWarehouseId} onChange={e => setBrokenWarehouseId(e.target.value)}><option value="">Wybierz magazyn uszkodzonych</option>{stockWarehouses.filter(w => w.warehouse_type === 'broken').map(w => <option key={w.id} value={w.id}>{w.warehouse_name}</option>)}</select>}</div>}
                                     {serviceNoteError && <p className="service-note-message service-note-message--error">{serviceNoteError}</p>}
                                     <div className="repair-modal__actions"><button type="button" className="report-action-button" onClick={() => setShowRepairResultModal(false)}>Anuluj</button><button type="submit" className="report-action-button report-action-button--primary" disabled={serviceNoteBusy}>{serviceNoteBusy ? 'Zapisywanie...' : 'Zapisz rezultat'}</button></div>
                                 </form>
@@ -577,12 +951,22 @@ export const ReportDetailsPage = () => {
 
                                 </details>
 
+                                {/* ZINTEGROWANA SEKCJA WYCENY NAPRAWY */}
+                                <RepairCostSection
+                                    report={report}
+                                    isAdmin={isAdmin}
+                                    onSavePricing={handleSavePricing}
+                                    onAcceptPrice={handleAcceptPrice}
+                                    stockItems={stockItems}
+                                    stockResources={stockResources}
+                                />
+
                                 {/* Klient widzi podsumowanie danych serwisowych; administrator ma je w panelu diagnozy / naprawy. */}
                                 {!isAdmin && <details className="details-card service-notes-card details-card--collapsible" open>
                                     <summary className="details-card__header"><div className="details-card__icon"><Wrench size={19} /></div><div><h2>Dane serwisowe</h2><p>Informacje uzupełniane przez technika</p></div></summary>
                                     <div className="service-note-readonly">
                                         <div className="service-note-readonly__item"><span>Opis diagnozy</span><p>{report.diagnosis_description || 'Diagnoza nie została jeszcze uzupełniona.'}</p></div>
-                                        {showRepairResult && <div className="service-note-readonly__item"><span>Rezultat naprawy</span><p>{report.repair_result || 'Rezultat naprawy nie został jeszcze uzupełniony.'}</p></div>}
+                                        {showRepairResult && <div className="service-note-readonly__item"><span>Rezultat naprawy</span><p>{report.repair_result || 'Rezultat naprawy nie został jeszcze uzupełniona.'}</p></div>}
                                     </div>
                                 </details>}
 
