@@ -24,6 +24,7 @@ import { getReportById, updateServiceNote, saveQualityResult } from '../services
 import { getComments, addComment } from '../services/commentsService';
 import { updateReportStatus, pauseReport, resumeReport, getReportStatusHistory } from '../services/reportStatusService';
 import { getReportParts, issueReportPart, returnReportPart, getItems, getResources, getWarehouses } from '../services/inventoryService';
+import ContactModal from '../components/ContactModal/ContactModal';
 
 import './ReportDetailsPage.scss';
 
@@ -354,6 +355,9 @@ export const ReportDetailsPage = () => {
                                 </span>
 
                                 <h1>{report.device_name}</h1>
+
+                                <ContactModal reportId={report.id} title={report.device_name} />
+
 
                                 <p>
                                     Szczegóły zgłoszenia reklamacyjnego
