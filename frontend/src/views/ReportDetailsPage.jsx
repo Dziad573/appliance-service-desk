@@ -354,9 +354,9 @@ export const ReportDetailsPage = () => {
                                     REKLAMACJA #{report.id}
                                 </span>
 
-                                <h1>{report.device_name}</h1>
+                                <h1 className="report-details-name">{report.device_name} <ContactModal reportId={report.id} title={report.device_name} /></h1>
 
-                                <ContactModal reportId={report.id} title={report.device_name} />
+                                
 
 
                                 <p>
