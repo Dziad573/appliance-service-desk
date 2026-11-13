@@ -531,7 +531,12 @@ export const ReportsPage = () => {
 
                                             {/* 4. Status */}
                                             <div className="table-cell">
-                                                {getStatusBadge(report.status)}
+                                                <div className="report-status-cell">
+                                                    {getStatusBadge(report.status)}
+                                                    {!isAdmin && report.pricing_required && report.pricing_sent_at && report.price_accepted == null && (
+                                                        <span className="customer-action-required">Wymagana akcja – decyzja dot. wyceny</span>
+                                                    )}
+                                                </div>
                                             </div>
 
                                             {/* 5. Data zgłoszenia */}

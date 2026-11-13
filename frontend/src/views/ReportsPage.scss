@@ -550,3 +550,8 @@
         }
     }
 }
+
+.customer-action-required { display:inline-flex; margin-top:5px; padding:4px 8px; border-radius:5px; background:#fff4d6; color:#9a5b00; font-size:.72rem; font-weight:700; white-space:nowrap; }
+
+.report-status-cell { display:flex; flex-direction:column; align-items:flex-start; gap:6px; min-width:0; max-width:100%; }
+.customer-action-required { display:block; max-width:100%; margin:0; padding:5px 8px; border-radius:6px; background:#fff4d6; color:#925500; font-size:.7rem; line-height:1.25; font-weight:700; white-space:normal; overflow-wrap:anywhere; }

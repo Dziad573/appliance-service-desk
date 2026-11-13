@@ -5,7 +5,7 @@ const port = Number(process.env.PORT || 3001);
 
 app.use(cors({ origin: 'http://localhost:3000', credentials: true }));
 
-const { sequelize, User, Report, Comment, ReportStatusHistory, Brand, Item, Warehouse, Resource, ReportPart } = require('./models');
+const { sequelize, User, Report, Comment, ReportStatusHistory, Brand, Item, Warehouse, Resource, ReportPart, ReportPricingPart } = require('./models');
 const { Op } = require('sequelize');
 
 app.use(express.json());
@@ -497,6 +497,90 @@ app.post('/reports/:reportId/comments', async (req, res) => {
 });
 
 
+
+// ===== WYCENA NAPRAWY =====
+app.get('/reports/:reportId/pricing', async (req, res) => {
+  try {
+    const report = await Report.findByPk(Number(req.params.reportId));
+    if (!report) return res.status(404).json({ message: 'Nie znaleziono reklamacji.' });
+    const parts = await ReportPricingPart.findAll({ where: { report_id: report.id }, order: [['id', 'ASC']] });
+    return res.json({ report, parts });
+  } catch (e) { console.error(e); return res.status(500).json({ message: 'Nie udało się pobrać wyceny.' }); }
+});
+
+app.put('/reports/:reportId/pricing', async (req, res) => {
+  const transaction = await sequelize.transaction();
+  try {
+    const reportId = Number(req.params.reportId);
+    const userId = Number(req.body.user_id);
+    const editor = await User.findByPk(userId, { transaction });
+    const report = await Report.findByPk(reportId, { transaction });
+    if (!editor || editor.role !== 'admin') { await transaction.rollback(); return res.status(403).json({ message: 'Tylko administrator może edytować wycenę.' }); }
+    if (!report) { await transaction.rollback(); return res.status(404).json({ message: 'Nie znaleziono reklamacji.' }); }
+    if (!['Diagnoza', 'W naprawie'].includes(report.status) || report.is_paused) { await transaction.rollback(); return res.status(409).json({ message: 'Wycena jest dostępna wyłącznie podczas aktywnej diagnozy lub naprawy.' }); }
+    const rows = Array.isArray(req.body.parts) ? req.body.parts : [];
+    const labor = Number(req.body.labor_cost || 0);
+    if (!Number.isFinite(labor) || labor < 0 || rows.some(p => !String(p.item_name || '').trim() || !Number.isInteger(Number(p.quantity)) || Number(p.quantity) < 1 || !Number.isFinite(Number(p.unit_price)) || Number(p.unit_price) < 0)) {
+      await transaction.rollback(); return res.status(400).json({ message: 'Nieprawidłowe pozycje wyceny.' });
+    }
+    await ReportPricingPart.destroy({ where: { report_id: reportId }, transaction });
+    for (const p of rows) await ReportPricingPart.create({
+      report_id: reportId, item_id: p.item_id ? Number(p.item_id) : null,
+      item_name: String(p.item_name).trim(), part_number: p.part_number || null,
+      quantity: Number(p.quantity), unit_price: Number(p.unit_price),
+      charge_customer: p.charge_customer !== false
+    }, { transaction });
+    const total = rows.reduce((sum, p) => sum + (p.charge_customer === false ? 0 : Number(p.unit_price) * Number(p.quantity)), 0) + labor;
+    report.pricing_required = req.body.pricing_required === true;
+    report.labor_cost = labor;
+    report.total_cost = total;
+    report.price_accepted = null;
+    report.pricing_sent_at = null;
+    await report.save({ transaction });
+    await transaction.commit();
+    return res.json({ report, parts: await ReportPricingPart.findAll({ where: { report_id: reportId }, order: [['id', 'ASC']] }) });
+  } catch (e) { await transaction.rollback(); console.error(e); return res.status(500).json({ message: 'Nie udało się zapisać wyceny.' }); }
+});
+
+app.post('/reports/:reportId/pricing/send', async (req, res) => {
+  try {
+    const reportId = Number(req.params.reportId), userId = Number(req.body.user_id);
+    const editor = await User.findByPk(userId);
+    const report = await Report.findByPk(reportId);
+    if (!editor || editor.role !== 'admin') return res.status(403).json({ message: 'Tylko administrator może wysłać wycenę.' });
+    if (!report) return res.status(404).json({ message: 'Nie znaleziono reklamacji.' });
+    if (!['Diagnoza', 'W naprawie'].includes(report.status) || report.is_paused) return res.status(409).json({ message: 'Wycena może zostać wysłana wyłącznie podczas aktywnej diagnozy lub naprawy.' });
+    if (!report.pricing_required) return res.status(409).json({ message: 'Najpierw zaznacz, że reklamacja wymaga wyceny.' });
+    const parts = await ReportPricingPart.findAll({ where: { report_id: reportId } });
+    if (!parts.length && Number(report.labor_cost) === 0) return res.status(409).json({ message: 'Uzupełnij wycenę przed wysłaniem.' });
+    const oldStatus = report.status;
+    report.is_paused = true; report.paused_at = new Date();
+    report.pause_reason = 'Oczekiwanie na klienta'; report.pause_note = 'Wysłano wycenę — oczekiwanie na decyzję klienta.';
+    report.price_accepted = null; report.pricing_sent_at = new Date();
+    await report.save();
+    await ReportStatusHistory.create({ report_id: reportId, old_status: oldStatus, new_status: oldStatus, action: 'pause', reason: report.pause_reason, note: report.pause_note, changed_by: userId });
+    return res.json(report);
+  } catch (e) { console.error(e); return res.status(500).json({ message: 'Nie udało się wysłać wyceny.' }); }
+});
+
+app.post('/reports/:reportId/pricing/decision', async (req, res) => {
+  try {
+    const reportId = Number(req.params.reportId), userId = Number(req.body.user_id);
+    const accepted = req.body.accepted === true;
+    const customer = await User.findByPk(userId);
+    const report = await Report.findByPk(reportId);
+    if (!customer || customer.role === 'admin' || !report || Number(report.user_id) !== userId) return res.status(403).json({ message: 'Brak uprawnień do tej reklamacji.' });
+    if (!report.pricing_sent_at || !report.is_paused || report.pause_reason !== 'Oczekiwanie na klienta' || report.price_accepted !== null) return res.status(409).json({ message: 'Ta wycena nie oczekuje na decyzję.' });
+    const oldStatus = report.status;
+    report.price_accepted = accepted;
+    report.is_paused = false; report.paused_at = null; report.pause_reason = null; report.pause_note = null;
+    if (!accepted) report.status = 'Odrzucona';
+    await report.save();
+    await ReportStatusHistory.create({ report_id: reportId, old_status: oldStatus, new_status: report.status, action: accepted ? 'resume' : 'status', changed_by: userId, note: accepted ? 'Klient zaakceptował wycenę.' : 'Klient odrzucił wycenę.' });
+    return res.json(report);
+  } catch (e) { console.error(e); return res.status(500).json({ message: 'Nie udało się zapisać decyzji klienta.' }); }
+});
+
 // ===== KATALOG I MAGAZYN =====
 
 // Części pobrane do realizacji reklamacji. Pobranie pomniejsza stan w magazynie.
@@ -761,6 +845,17 @@ async function startServer() {
         if (sequelize.getDialect() === 'sqlite') {
             await sequelize.sync();
             const reportColumns = await sequelize.getQueryInterface().describeTable('reports');
+            const pricingColumns = {
+                pricing_required: { type: require('sequelize').BOOLEAN, allowNull: false, defaultValue: false },
+                price_accepted: { type: require('sequelize').BOOLEAN, allowNull: true, defaultValue: null },
+                pricing_sent_at: { type: require('sequelize').DATE, allowNull: true },
+                labor_cost: { type: require('sequelize').DECIMAL(10, 2), allowNull: false, defaultValue: 0 },
+                total_cost: { type: require('sequelize').DECIMAL(10, 2), allowNull: false, defaultValue: 0 }
+            };
+            for (const [column, definition] of Object.entries(pricingColumns)) {
+                if (!reportColumns[column]) await sequelize.getQueryInterface().addColumn('reports', column, definition);
+            }
+
             if (!reportColumns.repair_code) {
                 await sequelize.getQueryInterface().addColumn('reports', 'repair_code', { type: require('sequelize').STRING(20), allowNull: true });
             }

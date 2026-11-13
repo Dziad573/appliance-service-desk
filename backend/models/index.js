@@ -10,6 +10,7 @@ const Item = require('./Item')(sequelize, Sequelize);
 const Warehouse = require('./Warehouse')(sequelize, Sequelize);
 const Resource = require('./Resource')(sequelize, Sequelize);
 const ReportPart = require('./ReportPart')(sequelize, Sequelize);
+const ReportPricingPart = require('./ReportPricingPart')(sequelize, Sequelize);
 
 User.hasMany(Report, { foreignKey: 'user_id', as: 'reports' });
 Report.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
@@ -23,6 +24,8 @@ Resource.belongsTo(Warehouse, { foreignKey: 'warehouse_id', as: 'warehouse' });
 Item.hasMany(Report, { foreignKey: 'item_id', as: 'reports' });
 Report.belongsTo(Item, { foreignKey: 'item_id', as: 'item' });
 Report.hasMany(ReportPart, { foreignKey: 'report_id', as: 'parts' });
+Report.hasMany(ReportPricingPart, { foreignKey: 'report_id', as: 'pricingParts' });
+ReportPricingPart.belongsTo(Report, { foreignKey: 'report_id', as: 'report' });
 ReportPart.belongsTo(Report, { foreignKey: 'report_id', as: 'report' });
 Item.hasMany(ReportPart, { foreignKey: 'item_id', as: 'reportParts' });
 ReportPart.belongsTo(Item, { foreignKey: 'item_id', as: 'item' });
@@ -47,5 +50,5 @@ module.exports = {
     User,
     Report,
     Comment,
-    ReportStatusHistory, Brand, Item, Warehouse, Resource, ReportPart
+    ReportStatusHistory, Brand, Item, Warehouse, Resource, ReportPart, ReportPricingPart
 };

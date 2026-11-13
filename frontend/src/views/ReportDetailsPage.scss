@@ -1198,3 +1198,101 @@
         gap: 12px;
     }
 }
+/* Wycena w przebiegu reklamacji */
+.pricing-required-toggle { display:flex; align-items:center; gap:9px; margin: 0 0 14px; font-weight:600; }
+.pricing-required-toggle input { width:17px; height:17px; }
+.pricing-card { margin-top: 18px; }
+.pricing-card .admin-pricing__summary { display:flex; justify-content:space-between; align-items:center; padding:14px 0; border-top:1px solid var(--border-color); font-weight:600; }
+.pricing-modal-items { max-height:220px; overflow:auto; margin:8px 0 14px; }
+.pricing-modal-items .repair-part-row { margin-bottom:6px; }
+.pricing-card .admin-pricing__parts-list li small { font-size:.75rem; }
+
+.repair-workspace__grid > .pricing-card { grid-column: 1 / -1; }
+
+/* Wycena w szczegółach reklamacji używa dokładnie tego samego wyglądu rekordów co modal i pobrane części. */
+.pricing-card .admin-pricing__parts-list { margin-top: 14px; }
+.pricing-detail-rows { display: flex; flex-direction: column; min-width: 0; }
+.pricing-detail-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 11px 0; border: 0; border-bottom: 1px solid var(--border-color); border-radius: 0; background: transparent; box-shadow: none; }
+.pricing-detail-row:first-child { padding-top: 3px; }
+.pricing-detail-row .repair-part-row__main { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.pricing-detail-row .repair-part-row__main strong { color: var(--text-main); font-size: .84rem; font-weight: 700; overflow-wrap: anywhere; }
+.pricing-detail-row .repair-part-row__main span { color: var(--text-muted); font-size: .74rem; line-height: 1.4; overflow-wrap: anywhere; }
+.pricing-card .admin-pricing__labor { display:flex; justify-content:space-between; padding: 12px 0; margin-top:8px; border:0; border-radius:0; background:transparent; }
+.pricing-card .admin-pricing__labor label { font-weight:700; }
+.pricing-card .admin-pricing__summary { margin-top: 10px; }
+.pricing-card .repair-modal__actions { display:flex; justify-content:flex-end; flex-wrap:wrap; gap:10px; }
+.user-pricing__actions { margin-top: 16px; padding: 16px; border: 1px solid #f4d36b; border-radius: 9px; background: #fffbeb; color: #854d0e; }
+.user-pricing__actions p { display:flex; flex-direction:column; gap:4px; margin:0 0 13px; }
+.user-pricing__buttons { display:flex; flex-wrap:wrap; gap:10px; }
+.report-action-button--danger { color:#b42318 !important; border:1px solid #f1b5b1 !important; background:#fff !important; }
+.report-action-button--danger:hover { background:#fff1f0 !important; }
+.pricing-status-notice--pending { display:flex; align-items:center; gap:9px; margin-bottom:16px; padding:12px 16px; border:1px solid #f4d36b; border-radius:8px; background:#fffbeb; color:#854d0e; }
+/* Wycena: modal ma rozmiar zbliżony do formularza zgłoszenia, a lista używa wyglądu pobranych części. */
+.repair-modal.repair-pricing-modal {
+    width: min(900px, calc(100vw - 48px));
+    max-width: 900px;
+    min-height: min(600px, calc(90vh - 48px));
+    max-height: 90vh;
+}
+.repair-pricing-modal .pricing-modal-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, .95fr);
+    gap: 28px;
+    min-height: 420px;
+    align-items: stretch;
+}
+.repair-pricing-modal .pricing-modal-form {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-width: 0;
+}
+.repair-pricing-modal .pricing-modal-list {
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    display: flex;
+    flex-direction: column;
+}
+.repair-pricing-modal .pricing-modal-list h3 {
+    margin: 0 0 12px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border-color);
+    color: var(--text-main);
+    font-size: .95rem;
+    font-weight: 700;
+}
+.repair-pricing-modal .pricing-modal-list .repair-part-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 12px;
+    align-items: center;
+    padding: 11px 0;
+    border: 0;
+    border-bottom: 1px solid var(--border-color);
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+}
+.repair-pricing-modal .pricing-modal-list .repair-part-row:first-of-type { padding-top: 3px; }
+.repair-pricing-modal .pricing-modal-list .repair-part-row__main { display:flex; flex-direction:column; gap:4px; min-width:0; }
+.repair-pricing-modal .pricing-modal-list .repair-part-row__main strong { color:var(--text-main); font-size:.84rem; font-weight:700; }
+.repair-pricing-modal .pricing-modal-list .repair-part-row__main span { color:var(--text-muted); font-size:.74rem; line-height:1.4; overflow-wrap:anywhere; }
+.repair-pricing-modal .pricing-modal-list .admin-pricing__summary {
+    margin-top: auto;
+    padding-top: 16px;
+    border-top: 1px solid var(--border-color);
+}
+.pricing-history-card { margin-top:16px; }
+.pricing-history-card .admin-pricing__parts-list { padding: 0 18px 18px; }
+.pricing-history-card .pricing-detail-rows { padding-top: 2px; }
+@media (max-width: 760px) {
+    .repair-modal.repair-pricing-modal { width: min(100%, calc(100vw - 24px)); min-height: 0; padding: 18px; }
+    .repair-pricing-modal .pricing-modal-layout { grid-template-columns: 1fr; min-height: 0; }
+    .repair-pricing-modal .pricing-modal-list { order: 2; }
+    .repair-pricing-modal .pricing-modal-list .admin-pricing__summary { margin-top: 12px; }
+    .user-pricing__buttons { flex-direction:column; }
+    .user-pricing__buttons button { width:100%; justify-content:center; }
+}
