@@ -16,3 +16,6 @@ export const returnReportPart = async (reportId, partId, returned_by) => (await 
 
 export const updateItem = async (id, data) => (await axios.patch(`${API}/items/${id}`, data)).data;
 export const transactStock = async (data) => (await axios.post(`${API}/stock-transactions`, data)).data;
+
+export const getStockDocuments = async (direction) => (await axios.get(`${API}/documents`, { params: { direction } })).data;
+export const createStockDocument = async (data) => (await axios.post(`${API}/documents`, data)).data;

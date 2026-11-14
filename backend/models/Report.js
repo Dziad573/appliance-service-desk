@@ -55,6 +55,11 @@ module.exports = (sequelize, DataTypes) => {
             type: DataTypes.TEXT, 
             allowNull: true 
         },
+        pricing_required: { type: DataTypes.BOOLEAN, allowNull: false, defaultValue: false },
+        price_accepted: { type: DataTypes.BOOLEAN, allowNull: true, defaultValue: null },
+        pricing_sent_at: { type: DataTypes.DATE, allowNull: true },
+        labor_cost: { type: DataTypes.DECIMAL(10, 2), allowNull: false, defaultValue: 0 },
+        total_cost: { type: DataTypes.DECIMAL(10, 2), allowNull: false, defaultValue: 0 },
         created_at: { 
             type: DataTypes.DATE, 
             allowNull: false,

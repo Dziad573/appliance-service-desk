@@ -5,7 +5,7 @@ const port = Number(process.env.PORT || 3001);
 
 app.use(cors({ origin: 'http://localhost:3000', credentials: true }));
 
-const { sequelize, User, Report, Comment, ReportStatusHistory, Brand, Item, Warehouse, Resource, ReportPart } = require('./models');
+const { sequelize, User, Report, Comment, ReportStatusHistory, Brand, Item, Warehouse, Resource, ReportPart, ReportPricingPart, StockDocument, StockDocumentItem } = require('./models');
 const { Op } = require('sequelize');
 
 app.use(express.json());
@@ -497,6 +497,90 @@ app.post('/reports/:reportId/comments', async (req, res) => {
 });
 
 
+
+// ===== WYCENA NAPRAWY =====
+app.get('/reports/:reportId/pricing', async (req, res) => {
+  try {
+    const report = await Report.findByPk(Number(req.params.reportId));
+    if (!report) return res.status(404).json({ message: 'Nie znaleziono reklamacji.' });
+    const parts = await ReportPricingPart.findAll({ where: { report_id: report.id }, order: [['id', 'ASC']] });
+    return res.json({ report, parts });
+  } catch (e) { console.error(e); return res.status(500).json({ message: 'Nie udało się pobrać wyceny.' }); }
+});
+
+app.put('/reports/:reportId/pricing', async (req, res) => {
+  const transaction = await sequelize.transaction();
+  try {
+    const reportId = Number(req.params.reportId);
+    const userId = Number(req.body.user_id);
+    const editor = await User.findByPk(userId, { transaction });
+    const report = await Report.findByPk(reportId, { transaction });
+    if (!editor || editor.role !== 'admin') { await transaction.rollback(); return res.status(403).json({ message: 'Tylko administrator może edytować wycenę.' }); }
+    if (!report) { await transaction.rollback(); return res.status(404).json({ message: 'Nie znaleziono reklamacji.' }); }
+    if (!['Diagnoza', 'W naprawie'].includes(report.status) || report.is_paused) { await transaction.rollback(); return res.status(409).json({ message: 'Wycena jest dostępna wyłącznie podczas aktywnej diagnozy lub naprawy.' }); }
+    const rows = Array.isArray(req.body.parts) ? req.body.parts : [];
+    const labor = Number(req.body.labor_cost || 0);
+    if (!Number.isFinite(labor) || labor < 0 || rows.some(p => !String(p.item_name || '').trim() || !Number.isInteger(Number(p.quantity)) || Number(p.quantity) < 1 || !Number.isFinite(Number(p.unit_price)) || Number(p.unit_price) < 0)) {
+      await transaction.rollback(); return res.status(400).json({ message: 'Nieprawidłowe pozycje wyceny.' });
+    }
+    await ReportPricingPart.destroy({ where: { report_id: reportId }, transaction });
+    for (const p of rows) await ReportPricingPart.create({
+      report_id: reportId, item_id: p.item_id ? Number(p.item_id) : null,
+      item_name: String(p.item_name).trim(), part_number: p.part_number || null,
+      quantity: Number(p.quantity), unit_price: Number(p.unit_price),
+      charge_customer: p.charge_customer !== false
+    }, { transaction });
+    const total = rows.reduce((sum, p) => sum + (p.charge_customer === false ? 0 : Number(p.unit_price) * Number(p.quantity)), 0) + labor;
+    report.pricing_required = req.body.pricing_required === true;
+    report.labor_cost = labor;
+    report.total_cost = total;
+    report.price_accepted = null;
+    report.pricing_sent_at = null;
+    await report.save({ transaction });
+    await transaction.commit();
+    return res.json({ report, parts: await ReportPricingPart.findAll({ where: { report_id: reportId }, order: [['id', 'ASC']] }) });
+  } catch (e) { await transaction.rollback(); console.error(e); return res.status(500).json({ message: 'Nie udało się zapisać wyceny.' }); }
+});
+
+app.post('/reports/:reportId/pricing/send', async (req, res) => {
+  try {
+    const reportId = Number(req.params.reportId), userId = Number(req.body.user_id);
+    const editor = await User.findByPk(userId);
+    const report = await Report.findByPk(reportId);
+    if (!editor || editor.role !== 'admin') return res.status(403).json({ message: 'Tylko administrator może wysłać wycenę.' });
+    if (!report) return res.status(404).json({ message: 'Nie znaleziono reklamacji.' });
+    if (!['Diagnoza', 'W naprawie'].includes(report.status) || report.is_paused) return res.status(409).json({ message: 'Wycena może zostać wysłana wyłącznie podczas aktywnej diagnozy lub naprawy.' });
+    if (!report.pricing_required) return res.status(409).json({ message: 'Najpierw zaznacz, że reklamacja wymaga wyceny.' });
+    const parts = await ReportPricingPart.findAll({ where: { report_id: reportId } });
+    if (!parts.length && Number(report.labor_cost) === 0) return res.status(409).json({ message: 'Uzupełnij wycenę przed wysłaniem.' });
+    const oldStatus = report.status;
+    report.is_paused = true; report.paused_at = new Date();
+    report.pause_reason = 'Oczekiwanie na klienta'; report.pause_note = 'Wysłano wycenę — oczekiwanie na decyzję klienta.';
+    report.price_accepted = null; report.pricing_sent_at = new Date();
+    await report.save();
+    await ReportStatusHistory.create({ report_id: reportId, old_status: oldStatus, new_status: oldStatus, action: 'pause', reason: report.pause_reason, note: report.pause_note, changed_by: userId });
+    return res.json(report);
+  } catch (e) { console.error(e); return res.status(500).json({ message: 'Nie udało się wysłać wyceny.' }); }
+});
+
+app.post('/reports/:reportId/pricing/decision', async (req, res) => {
+  try {
+    const reportId = Number(req.params.reportId), userId = Number(req.body.user_id);
+    const accepted = req.body.accepted === true;
+    const customer = await User.findByPk(userId);
+    const report = await Report.findByPk(reportId);
+    if (!customer || customer.role === 'admin' || !report || Number(report.user_id) !== userId) return res.status(403).json({ message: 'Brak uprawnień do tej reklamacji.' });
+    if (!report.pricing_sent_at || !report.is_paused || report.pause_reason !== 'Oczekiwanie na klienta' || report.price_accepted !== null) return res.status(409).json({ message: 'Ta wycena nie oczekuje na decyzję.' });
+    const oldStatus = report.status;
+    report.price_accepted = accepted;
+    report.is_paused = false; report.paused_at = null; report.pause_reason = null; report.pause_note = null;
+    if (!accepted) report.status = 'Odrzucona';
+    await report.save();
+    await ReportStatusHistory.create({ report_id: reportId, old_status: oldStatus, new_status: report.status, action: accepted ? 'resume' : 'status', changed_by: userId, note: accepted ? 'Klient zaakceptował wycenę.' : 'Klient odrzucił wycenę.' });
+    return res.json(report);
+  } catch (e) { console.error(e); return res.status(500).json({ message: 'Nie udało się zapisać decyzji klienta.' }); }
+});
+
 // ===== KATALOG I MAGAZYN =====
 
 // Części pobrane do realizacji reklamacji. Pobranie pomniejsza stan w magazynie.
@@ -545,8 +629,12 @@ app.post('/reports/:reportId/parts', async (req, res) => {
     if (!warehouse || warehouse.warehouse_type === 'broken') { await transaction.rollback(); return res.status(400).json({ message: 'Z tego magazynu nie można pobierać części.' }); }
     const resource = await Resource.findOne({ where: { item_id: itemId, warehouse_id: warehouseId }, transaction, lock: sequelize.getDialect() === 'mssql' ? transaction.LOCK.UPDATE : undefined });
     if (!resource || resource.quantity < quantity) { await transaction.rollback(); return res.status(409).json({ message: `Niewystarczający stan magazynowy. Dostępne: ${resource?.quantity || 0}.` }); }
-    await resource.decrement('quantity', { by: quantity, transaction });
     const created = await ReportPart.create({ report_id: reportId, item_id: itemId, warehouse_id: warehouseId, quantity, issue_type: issueType, issued_by: issuedBy }, { transaction });
+    await createStockDocument({
+      direction: 'out', warehouse_id: warehouseId, reference_report_id: reportId,
+      source_type: 'claim_part', created_by: issuedBy, transaction,
+      rows: [{ item_id: itemId, quantity, report_part_id: created.id }]
+    });
     await transaction.commit();
     const result = await ReportPart.findByPk(created.id, { include: [{ model: Item, as: 'item', include: [{ model: Brand, as: 'brand' }] }, { model: Warehouse, as: 'warehouse' }] });
     return res.status(201).json(result);
@@ -570,8 +658,11 @@ app.delete('/reports/:reportId/parts/:partId', async (req, res) => {
     if (!row) { await transaction.rollback(); return res.status(404).json({ message: 'Nie znaleziono pobrania części.' }); }
     if (row.returned_at) { await transaction.rollback(); return res.status(409).json({ message: 'Ta część została już zwrócona.' }); }
     const resource = await Resource.findOne({ where: { item_id: row.item_id, warehouse_id: row.warehouse_id }, transaction, lock: sequelize.getDialect() === 'mssql' ? transaction.LOCK.UPDATE : undefined });
-    if (!resource) { await transaction.rollback(); return res.status(409).json({ message: 'Nie znaleziono stanu magazynowego do zwrotu.' }); }
-    await resource.increment('quantity', { by: row.quantity, transaction });
+    await createStockDocument({
+      direction: 'in', warehouse_id: row.warehouse_id, reference_report_id: reportId,
+      source_type: 'claim_part_return', created_by: returnerId, transaction,
+      rows: [{ item_id: row.item_id, quantity: row.quantity, report_part_id: row.id }]
+    });
     row.returned_at = new Date();
     row.returned_by = req.body?.returned_by || null;
     await row.save({ transaction });
@@ -652,63 +743,149 @@ app.get('/inventory/resources', async (req, res) => {
     res.json(await Resource.findAll({ include: [{ model: Item, as: 'item', include: [{ model: Brand, as: 'brand', attributes: ['brand_name'] }] }, { model: Warehouse, as: 'warehouse' }], order: [['id', 'DESC']] }));
   } catch (e) { console.error(e); res.status(500).json({ message: 'Nie udało się pobrać stanów magazynowych.' }); }
 });
-// Przyjęcie dostawy: zwiększa stan istniejącej pozycji albo tworzy nowy rekord zasobu.
+// Starszy endpoint pojedynczego przyjęcia – zachowany dla zgodności, ale również tworzy dokument PZ.
 app.post('/inventory/receipts', async (req, res) => {
+  const transaction = await sequelize.transaction();
   try {
     const item_id = Number(req.body.item_id), warehouse_id = Number(req.body.warehouse_id), quantity = Number(req.body.quantity);
-    if (!Number.isInteger(item_id) || !Number.isInteger(warehouse_id) || !Number.isInteger(quantity) || quantity <= 0) return res.status(400).json({ message: 'Podaj pozycję, magazyn i ilość większą od zera.' });
-    const [resource] = await Resource.findOrCreate({ where: { item_id, warehouse_id }, defaults: { item_id, warehouse_id, quantity: 0 } });
-    await resource.increment('quantity', { by: quantity });
-    await resource.reload();
-    res.status(201).json(resource);
-  } catch (e) { console.error(e); res.status(400).json({ message: 'Nie udało się przyjąć dostawy.' }); }
+    if (!Number.isInteger(item_id) || !Number.isInteger(warehouse_id) || !Number.isInteger(quantity) || quantity <= 0) {
+      await transaction.rollback();
+      return res.status(400).json({ message: 'Podaj pozycję, magazyn i ilość większą od zera.' });
+    }
+    await createStockDocument({
+      direction: 'in', warehouse_id, rows: [{ item_id, quantity, serial_number: req.body.serial_number || null }],
+      notes: req.body.notes || null, created_by: req.body.created_by || null, transaction
+    });
+    await transaction.commit();
+    return res.status(201).json({ message: 'Zatowarowanie zostało zapisane.' });
+  } catch (err) {
+    await transaction.rollback();
+    console.error('Błąd przyjęcia dostawy:', err);
+    return res.status(400).json({ message: err.message || 'Nie udało się przyjąć dostawy.' });
+  }
 });
 
-// Zbiorcze zatowarowanie lub wydanie wielu pozycji z jednego magazynu.
+// Dokumenty magazynowe: każde ręczne zatowarowanie i wydanie ma nagłówek oraz pozycje.
+app.get('/inventory/documents', async (req, res) => {
+  try {
+    const direction = ['in', 'out'].includes(req.query.direction) ? req.query.direction : undefined;
+    const documents = await StockDocument.findAll({
+      where: direction ? { direction } : {},
+      include: [
+        { model: Warehouse, as: 'warehouse' },
+        { model: Report, as: 'report', attributes: ['id', 'device_name', 'serial_number', 'status'] },
+        { model: User, as: 'createdBy', attributes: ['id', 'login'] },
+        {
+          model: StockDocumentItem,
+          as: 'items',
+          include: [
+            { model: Item, as: 'item', include: [{ model: Brand, as: 'brand', attributes: ['id', 'brand_name'] }] },
+            { model: ReportPart, as: 'reportPart', attributes: ['id', 'status', 'returned_at'] }
+          ]
+        }
+      ],
+      order: [['created_at', 'DESC'], ['id', 'DESC']]
+    });
+    return res.json(documents);
+  } catch (err) {
+    console.error('Błąd pobierania dokumentów magazynowych:', err);
+    return res.status(500).json({ message: 'Nie udało się pobrać historii operacji magazynowych.' });
+  }
+});
+
+async function createStockDocument({ direction, warehouse_id, rows, reference_report_id = null, source_type = 'manual', notes = null, created_by = null, transaction }) {
+  const warehouse = await Warehouse.findByPk(warehouse_id, { transaction });
+  if (!warehouse || (direction === 'out' && warehouse.warehouse_type === 'broken')) {
+    throw new Error('Nieprawidłowy magazyn dla tej operacji.');
+  }
+  const prepared = [];
+  for (const row of rows) {
+    const item_id = Number(row.item_id), quantity = Number(row.quantity);
+    const serial_number = String(row.serial_number || '').trim() || null;
+    if (!Number.isInteger(item_id) || !Number.isInteger(quantity) || quantity <= 0) throw new Error('Każda pozycja musi mieć poprawny item i ilość większą od zera.');
+    if (serial_number && quantity !== 1) throw new Error('Jeśli podajesz numer seryjny, ilość tej pozycji musi wynosić 1. Dla wielu numerów dodaj osobne pozycje.');
+    const item = await Item.findByPk(item_id, { transaction });
+    if (!item || !item.is_active) throw new Error('Jedna z wybranych pozycji jest niedostępna.');
+    const resource = await Resource.findOne({ where: { item_id, warehouse_id }, transaction, lock: sequelize.getDialect() === 'mssql' ? transaction.LOCK.UPDATE : undefined });
+    if (direction === 'out' && (!resource || resource.quantity < quantity)) {
+      throw new Error(`Brak wystarczającej ilości pozycji ${item.item_name}. Dostępne: ${resource?.quantity || 0}.`);
+    }
+    prepared.push({ item_id, quantity, serial_number, item, resource, report_part_id: row.report_part_id || null });
+  }
+  const totalsByItem = new Map();
+  for (const row of prepared) totalsByItem.set(row.item_id, (totalsByItem.get(row.item_id) || 0) + row.quantity);
+  if (direction === 'out') {
+    for (const [itemId, total] of totalsByItem.entries()) {
+      const resource = prepared.find(row => row.item_id === itemId)?.resource;
+      if (!resource || resource.quantity < total) {
+        const itemName = prepared.find(row => row.item_id === itemId)?.item?.item_name || `#${itemId}`;
+        throw new Error(`Brak wystarczającej ilości pozycji ${itemName}. Dostępne: ${resource?.quantity || 0}.`);
+      }
+    }
+  }
+  const document = await StockDocument.create({
+    direction, warehouse_id, reference_report_id, source_type,
+    notes: notes || null, created_by: created_by || null
+  }, { transaction });
+  for (const row of prepared) {
+    let resource = row.resource;
+    if (direction === 'out') await resource.decrement('quantity', { by: row.quantity, transaction });
+    else {
+      if (!resource) {
+        [resource] = await Resource.findOrCreate({
+          where: { item_id: row.item_id, warehouse_id },
+          defaults: { item_id: row.item_id, warehouse_id, quantity: 0 },
+          transaction
+        });
+      }
+      await resource.increment('quantity', { by: row.quantity, transaction });
+    }
+    await StockDocumentItem.create({
+      document_id: document.id, item_id: row.item_id, quantity: row.quantity,
+      serial_number: row.serial_number, report_part_id: row.report_part_id || null
+    }, { transaction });
+  }
+  return document;
+}
+
+// Zachowanie dotychczasowego endpointu dla zgodności wstecznej; zapisuje już pełny dokument.
 app.post('/inventory/stock-transactions', async (req, res) => {
   const transaction = await sequelize.transaction();
   try {
-    const warehouse_id = Number(req.body.warehouse_id);
     const direction = req.body.direction;
+    const warehouse_id = Number(req.body.warehouse_id);
     const rows = Array.isArray(req.body.items) ? req.body.items : [];
-    if (!Number.isInteger(warehouse_id) || !['in','out'].includes(direction) || !rows.length) {
+    if (!Number.isInteger(warehouse_id) || !['in', 'out'].includes(direction) || !rows.length) {
       await transaction.rollback();
       return res.status(400).json({ message: 'Wybierz magazyn i dodaj co najmniej jedną pozycję.' });
     }
-    const warehouse = await Warehouse.findByPk(warehouse_id, { transaction });
-    if (!warehouse || (direction === 'out' && warehouse.warehouse_type === 'broken')) {
-      await transaction.rollback();
-      return res.status(400).json({ message: 'Nieprawidłowy magazyn dla tej operacji.' });
-    }
-    for (const row of rows) {
-      const item_id = Number(row.item_id), quantity = Number(row.quantity);
-      if (!Number.isInteger(item_id) || !Number.isInteger(quantity) || quantity <= 0) {
-        await transaction.rollback();
-        return res.status(400).json({ message: 'Każda pozycja musi mieć poprawny item i ilość większą od zera.' });
-      }
-      const item = await Item.findByPk(item_id, { transaction });
-      if (!item || !item.is_active) {
-        await transaction.rollback();
-        return res.status(400).json({ message: 'Jedna z wybranych pozycji jest niedostępna.' });
-      }
-      let resource = await Resource.findOne({ where: { item_id, warehouse_id }, transaction, lock: sequelize.getDialect() === 'mssql' ? transaction.LOCK.UPDATE : undefined });
-      if (direction === 'out') {
-        if (!resource || resource.quantity < quantity) {
-          await transaction.rollback();
-          return res.status(409).json({ message: `Brak wystarczającej ilości pozycji ${item.item_name}. Dostępne: ${resource?.quantity || 0}.` });
-        }
-        await resource.decrement('quantity', { by: quantity, transaction });
-      } else {
-        if (!resource) resource = await Resource.create({ item_id, warehouse_id, quantity: 0 }, { transaction });
-        await resource.increment('quantity', { by: quantity, transaction });
-      }
-    }
+    await createStockDocument({ direction, warehouse_id, rows, notes: req.body.notes, created_by: req.body.created_by, transaction });
     await transaction.commit();
-    return res.json({ message: direction === 'in' ? 'Zatowarowanie zostało zapisane.' : 'Wydanie zostało zapisane.' });
+    return res.status(201).json({ message: direction === 'in' ? 'Zatowarowanie zostało zapisane.' : 'Wydanie zostało zapisane.' });
   } catch (err) {
     await transaction.rollback();
     console.error('Błąd operacji magazynowej:', err);
-    return res.status(500).json({ message: 'Nie udało się wykonać operacji magazynowej.' });
+    return res.status(400).json({ message: err.message || 'Nie udało się wykonać operacji magazynowej.' });
+  }
+});
+
+app.post('/inventory/documents', async (req, res) => {
+  const transaction = await sequelize.transaction();
+  try {
+    const direction = req.body.direction;
+    const warehouse_id = Number(req.body.warehouse_id);
+    const rows = Array.isArray(req.body.items) ? req.body.items : [];
+    if (!Number.isInteger(warehouse_id) || !['in', 'out'].includes(direction) || !rows.length) {
+      await transaction.rollback();
+      return res.status(400).json({ message: 'Wybierz magazyn i dodaj co najmniej jedną pozycję.' });
+    }
+    await createStockDocument({ direction, warehouse_id, rows, notes: req.body.notes, created_by: req.body.created_by, transaction });
+    await transaction.commit();
+    return res.status(201).json({ message: direction === 'in' ? 'Zatowarowanie zostało zapisane.' : 'Wydanie zostało zapisane.' });
+  } catch (err) {
+    await transaction.rollback();
+    console.error('Błąd tworzenia dokumentu magazynowego:', err);
+    return res.status(400).json({ message: err.message || 'Nie udało się utworzyć dokumentu magazynowego.' });
   }
 });
 
@@ -735,6 +912,15 @@ app.post('/reports/:reportId/quality-result', async (req, res) => {
       let resource = await Resource.findOne({ where: { item_id: report.item_id, warehouse_id: brokenWarehouseId }, transaction });
       if (!resource) resource = await Resource.create({ item_id: report.item_id, warehouse_id: brokenWarehouseId, quantity: 0 }, { transaction });
       await resource.increment('quantity', { by: 1, transaction });
+      const brokenDocument = await StockDocument.create({
+        direction: 'in', warehouse_id: brokenWarehouseId, reference_report_id: reportId,
+        source_type: 'claim_broken_device', notes: 'Urządzenie dodane do magazynu uszkodzonych po nieudanym QA.',
+        created_by: userId
+      }, { transaction });
+      await StockDocumentItem.create({
+        document_id: brokenDocument.id, item_id: report.item_id, quantity: 1,
+        serial_number: report.serial_number || null
+      }, { transaction });
     }
     const oldStatus = report.status;
     report.repair_result = resultText;
@@ -761,6 +947,17 @@ async function startServer() {
         if (sequelize.getDialect() === 'sqlite') {
             await sequelize.sync();
             const reportColumns = await sequelize.getQueryInterface().describeTable('reports');
+            const pricingColumns = {
+                pricing_required: { type: require('sequelize').BOOLEAN, allowNull: false, defaultValue: false },
+                price_accepted: { type: require('sequelize').BOOLEAN, allowNull: true, defaultValue: null },
+                pricing_sent_at: { type: require('sequelize').DATE, allowNull: true },
+                labor_cost: { type: require('sequelize').DECIMAL(10, 2), allowNull: false, defaultValue: 0 },
+                total_cost: { type: require('sequelize').DECIMAL(10, 2), allowNull: false, defaultValue: 0 }
+            };
+            for (const [column, definition] of Object.entries(pricingColumns)) {
+                if (!reportColumns[column]) await sequelize.getQueryInterface().addColumn('reports', column, definition);
+            }
+
             if (!reportColumns.repair_code) {
                 await sequelize.getQueryInterface().addColumn('reports', 'repair_code', { type: require('sequelize').STRING(20), allowNull: true });
             }

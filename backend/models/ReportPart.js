@@ -7,6 +7,7 @@ module.exports = (sequelize, DataTypes) => sequelize.define('ReportPart', {
   issue_type: { type: DataTypes.STRING(20), allowNull: false },
   issued_by: { type: DataTypes.INTEGER, allowNull: true },
   created_at: { type: DataTypes.DATE, allowNull: false, defaultValue: DataTypes.NOW },
+  status: { type: DataTypes.STRING(20), allowNull: false, defaultValue: 'issued' },
   returned_at: { type: DataTypes.DATE, allowNull: true },
   returned_by: { type: DataTypes.INTEGER, allowNull: true }
 }, { tableName: 'report_parts', timestamps: false });

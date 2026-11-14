@@ -33,3 +33,20 @@ export async function saveQualityResult(reportId, data) {
     const res = await axios.post(`http://localhost:3001/reports/${reportId}/quality-result`, data);
     return res.data;
 }
+
+export async function getReportPricing(reportId) {
+    const res = await axios.get(`http://localhost:3001/reports/${reportId}/pricing`);
+    return res.data;
+}
+export async function saveReportPricing(reportId, data) {
+    const res = await axios.put(`http://localhost:3001/reports/${reportId}/pricing`, data);
+    return res.data;
+}
+export async function sendReportPricing(reportId, userId) {
+    const res = await axios.post(`http://localhost:3001/reports/${reportId}/pricing/send`, { user_id: userId });
+    return res.data;
+}
+export async function decideReportPricing(reportId, userId, accepted) {
+    const res = await axios.post(`http://localhost:3001/reports/${reportId}/pricing/decision`, { user_id: userId, accepted });
+    return res.data;
+}
