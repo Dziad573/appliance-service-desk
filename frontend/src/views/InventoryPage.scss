@@ -67,3 +67,29 @@
 .inventory-bulk-row { display: grid; grid-template-columns: minmax(0, 1fr) 130px auto; align-items: end; gap: 12px; padding: 12px; border: 1px solid var(--border-color, #d8dee9); border-radius: 10px; }
 .inventory-bulk-row label { display: grid; gap: 6px; }
 @media (max-width: 640px) { .inventory-bulk-row { grid-template-columns: 1fr; } }
+.inventory-heading-actions { display: flex; align-items: center; justify-content: flex-end; gap: 12px; flex-wrap: wrap; }
+.inventory-filters { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin: 0 0 16px; }
+.inventory-filters .inventory-search { flex: 1 1 260px; max-width: 390px; margin: 0; }
+.inventory-filters select { min-height: 40px; min-width: 145px; padding: 8px 30px 8px 10px; border: 1px solid #d1dbe7; border-radius: 7px; background: #fff; color: #16325c; font: inherit; font-size: .84rem; }
+.inventory-filters .inventory-secondary { min-height: 40px; }
+@media (max-width: 700px) { .inventory-heading-actions { width: 100%; justify-content: space-between; } .inventory-filters { align-items: stretch; } .inventory-filters .inventory-search, .inventory-filters select, .inventory-filters .inventory-secondary { max-width: none; width: 100%; flex-basis: 100%; } }
+
+/* Jednolity układ filtrów kolumnowych, zgodny z listą zgłoszeń */
+.inventory-table--filters thead th { vertical-align: top; white-space: normal; min-width: 105px; }
+.inventory-table--filters thead th > input,
+.inventory-table--filters thead th > select {
+  display: block; box-sizing: border-box; width: 100%; min-width: 0; height: 31px;
+  margin-top: 7px; padding: 5px 8px; border: 1px solid #dfe4eb; border-radius: 6px;
+  background: #fff; color: #16325c; font: inherit; font-size: .76rem; font-weight: 400;
+  outline: none;
+}
+.inventory-table--filters thead th > input::placeholder { color: #9aa8ba; }
+.inventory-table--filters thead th > input:focus,
+.inventory-table--filters thead th > select:focus { border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59,130,246,.12); }
+.inventory-table--filters thead th.numeric > input { text-align: right; }
+.inventory-table--filters { min-width: 850px; }
+.inventory-panel .inventory-heading-actions { gap: 10px; }
+@media (max-width: 700px) {
+  .inventory-table--filters thead th { min-width: 125px; }
+  .inventory-panel__heading { align-items: flex-start; flex-wrap: wrap; }
+}
