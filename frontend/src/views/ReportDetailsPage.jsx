@@ -26,6 +26,7 @@ import { getComments, addComment } from '../services/commentsService';
 import { updateReportStatus, pauseReport, resumeReport, getReportStatusHistory } from '../services/reportStatusService';
 import { getReportParts, issueReportPart, returnReportPart, getItems, getResources, getWarehouses } from '../services/inventoryService';
 import ContactModal from '../components/ContactModal/ContactModal';
+import emailjs from '@emailjs/browser';
 
 import './ReportDetailsPage.scss';
 
@@ -62,13 +63,58 @@ const RepairCostSection = ({ report, isAdmin, user, onSaved, onDecision, stockIt
         } catch (e) { setError(e.response?.data?.message || 'Nie udało się zapisać wyceny.'); }
         finally { setBusy(false); }
     };
-    const send = async () => {
-        if (!window.confirm('Wysłać wycenę klientowi i wstrzymać reklamację do czasu odpowiedzi?')) return;
-        setBusy(true); setError('');
-        try { const updated = await sendReportPricing(report.id, user.id); onSaved({ report: updated, parts }); setNotice('Wycena wysłana. Reklamacja oczekuje na odpowiedź klienta.'); }
-        catch (e) { setError(e.response?.data?.message || 'Nie udało się wysłać wyceny.'); }
-        finally { setBusy(false); }
-    };
+const send = async () => {
+    if (!window.confirm('Wysłać wycenę klientowi i wstrzymać reklamację do czasu odpowiedzi?')) return;
+    
+    setBusy(true); 
+    setError('');
+    setNotice('');
+
+    try {
+        const updated = await sendReportPricing(report.id, user.id);
+
+        const clientEmail = report.User?.login || report.client_email;
+        if (clientEmail) {
+            const formattedParts = parts.length > 0 
+                ? parts.map(p => `• ${p.item_name} (PN: ${p.part_number || '—'}) - ${p.quantity} szt. x ${Number(p.unit_price).toFixed(2)} zł = ${(Number(p.unit_price) * Number(p.quantity)).toFixed(2)} zł`).join('\n')
+                : 'Brak części (tylko robocizna/usługa)';
+
+            const laborCost = Number(labor || 0).toFixed(2);
+            const totalCost = total.toFixed(2);
+
+            const pricingDetailsMessage = `Zatwierdzona wycena naprawy:\n\n${formattedParts}\n\nRobocizna: ${laborCost} zł\n-----------------------------------\nŁĄCZNY KOSZT: ${totalCost} zł`;
+
+            const templateParams = {
+                report_id: report.id,
+                title: report.device_name || 'Ogólne zgłoszenie',
+                user_name: 'Serwis USWB',
+                user_email: 'uswb.app@gmail.com',
+                user_subject: `Wycena naprawy dla zgłoszenia #${report.id}`,
+                user_message: pricingDetailsMessage,
+                email: 'uswb.app@gmail.com',
+                to_email: clientEmail,
+                header_title: `Wycena naprawy dla zgłoszenia #${report.id}`,
+                intro_text: `Otrzymano oficjalną wycenę od serwisu <strong>Serwis USWB</strong>. Prosimy o zapoznanie się z kosztorysem w panelu klienta.`,
+                sender_title: 'Nadawca',
+                message_label: 'Szczegóły wyceny (Kosztorys):'
+            };
+
+            const SERVICE_ID = 'service_hw91cww';
+            const TEMPLATE_ID = 'template_g0uaba6';
+            const PUBLIC_KEY = '5YR5D_s2RYZLSEGRs';
+
+            await emailjs.send(SERVICE_ID, TEMPLATE_ID, templateParams, PUBLIC_KEY);
+        }
+
+        onSaved({ report: updated, parts }); 
+        setNotice('Wycena wysłana. Reklamacja oczekuje na odpowiedź klienta.');
+    } catch (e) {
+        console.error('Błąd wysyłania wyceny:', e);
+        setError(e.response?.data?.message || 'Nie udało się wysłać wyceny.');
+    } finally {
+        setBusy(false);
+    }
+};
     const decision = async accepted => {
         setBusy(true); setError('');
         try { onDecision(await decideReportPricing(report.id, user.id, accepted)); }
