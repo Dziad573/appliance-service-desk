@@ -73,7 +73,7 @@ const send = async () => {
     try {
         const updated = await sendReportPricing(report.id, user.id);
 
-        const clientEmail = report.User?.login || report.client_email;
+        const clientEmail = report.customer_email?.trim();
         if (clientEmail) {
             const formattedParts = parts.length > 0 
                 ? parts.map(p => `• ${p.item_name} (PN: ${p.part_number || '—'}) - ${p.quantity} szt. x ${Number(p.unit_price).toFixed(2)} zł = ${(Number(p.unit_price) * Number(p.quantity)).toFixed(2)} zł`).join('\n')
@@ -89,12 +89,13 @@ const send = async () => {
                 title: report.device_name || 'Ogólne zgłoszenie',
                 user_name: 'Serwis USWB',
                 user_email: 'uswb.app@gmail.com',
+                display_email: 'uswb.app@gmail.com',
                 user_subject: `Wycena naprawy dla zgłoszenia #${report.id}`,
                 user_message: pricingDetailsMessage,
                 email: 'uswb.app@gmail.com',
                 to_email: clientEmail,
                 header_title: `Wycena naprawy dla zgłoszenia #${report.id}`,
-                intro_text: `Otrzymano oficjalną wycenę od serwisu <strong>Serwis USWB</strong>. Prosimy o zapoznanie się z kosztorysem w panelu klienta.`,
+                intro_text: `Otrzymano oficjalną wycenę od serwisu Serwis USWB. Prosimy o zapoznanie się z kosztorysem w panelu klienta.`,
                 sender_title: 'Nadawca',
                 message_label: 'Szczegóły wyceny (Kosztorys):'
             };

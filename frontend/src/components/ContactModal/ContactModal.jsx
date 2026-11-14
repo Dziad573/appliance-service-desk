@@ -14,7 +14,7 @@ export default function ContactModal({ reportId, title = "Ogólne zgłoszenie" }
     const [formData, setFormData] = useState({
         user_name: isAdmin ? 'Serwis USWB' : (user?.login || ''),
         user_email: '',
-        user_subject: isAdmin ? `Wycena naprawy dla zgłoszenia #${reportId}` : '',
+        user_subject: isAdmin ? `Informacja dla zgłoszenia #${reportId}` : '',
         user_message: ''
     });
 
@@ -32,15 +32,15 @@ export default function ContactModal({ reportId, title = "Ogólne zgłoszenie" }
         const replyToEmail = isAdmin ? 'uswb.app@gmail.com' : formData.user_email;
 
         const headerTitle = isAdmin 
-            ? `Wycena naprawy dla zgłoszenia #${reportId}` 
+            ? `Informacja do zgłoszenia #${reportId}` 
             : `Nowe pytanie do zgłoszenia #${reportId}`;
 
         const introText = isAdmin
-            ? `Otrzymano oficjalną wycenę od serwisu ${formData.user_name}.`
+            ? `Otrzymano informację od serwisu ${formData.user_name}.`
             : `Otrzymano nową wiadomość od użytkownika ${formData.user_name}. Prosimy o odpowiedź w najdogodniejszym terminie.`;
 
         const senderTitle = isAdmin ? 'Nadawca' : 'Imię';
-        const messageLabel = isAdmin ? 'Wycena:' : 'Treść wiadomości:';
+        const messageLabel = isAdmin ? 'Treść wiadomości:' : 'Treść wiadomości:';
 
         const templateParams = {
             report_id: reportId,
@@ -64,12 +64,12 @@ export default function ContactModal({ reportId, title = "Ogólne zgłoszenie" }
         emailjs.send(SERVICE_ID, TEMPLATE_ID, templateParams, PUBLIC_KEY)
             .then((response) => {
                 console.log('SUCCESS!', response.status, response.text);
-                setStatusMessage(isAdmin ? 'Wycena została wysłana do klienta!' : 'Wiadomość została wysłana pomyślnie!');
+                setStatusMessage(isAdmin ? 'Wiadomość została wysłana do klienta!' : 'Wiadomość została wysłana pomyślnie!');
                 setLoading(false);
                 setFormData({ 
                     user_name: isAdmin ? 'Serwis USWB' : (user?.login || ''), 
                     user_email: '', 
-                    user_subject: isAdmin ? `Wycena naprawy dla zgłoszenia #${reportId}` : '', 
+                    user_subject: isAdmin ? `Informacja do zgłoszenia #${reportId}` : '', 
                     user_message: '' 
                 });
                 setTimeout(() => setIsOpen(false), 2000);
@@ -88,7 +88,7 @@ export default function ContactModal({ reportId, title = "Ogólne zgłoszenie" }
                 className={`report-question-btn ${isAdmin ? 'report-admin-btn' : ''}`}
                 onClick={() => setIsOpen(true)}
             >
-                {isAdmin ? 'Wyślij wycenę' : 'Zadaj pytanie'}
+                {isAdmin ? 'Wyślij wiadomość' : 'Zadaj pytanie'}
             </button>
 
             {isOpen && (
@@ -96,7 +96,7 @@ export default function ContactModal({ reportId, title = "Ogólne zgłoszenie" }
                     <div className="report-modal-content">
                         <h3>
                             {isAdmin 
-                                ? `Wyślij wycenę do zgłoszenia #${reportId}` 
+                                ? `Wyślij wiadomość do zgłoszenia #${reportId}` 
                                 : `Zadaj pytanie do zgłoszenia #${reportId}`}
                         </h3>
                         <form onSubmit={handleSubmit}>
@@ -112,7 +112,7 @@ export default function ContactModal({ reportId, title = "Ogólne zgłoszenie" }
                             </div>
 
                             <div className="report-form-group">
-                                <label>{isAdmin ? 'Email klienta (dokąd wysłać wycenę):' : 'Twój Email (kontaktowy):'}</label>
+                                <label>{isAdmin ? 'Email klienta:' : 'Twój Email (kontaktowy):'}</label>
                                 <input 
                                     type="email" 
                                     name="user_email" 
@@ -135,12 +135,12 @@ export default function ContactModal({ reportId, title = "Ogólne zgłoszenie" }
                             </div>
 
                             <div className="report-form-group">
-                                <label>{isAdmin ? 'Wycena:' : 'Wiadomość:'}</label>
+                                <label>{isAdmin ? 'Wiadomość:' : 'Wiadomość:'}</label>
                                 <textarea 
                                     name="user_message" 
                                     value={formData.user_message} 
                                     onChange={handleChange} 
-                                    placeholder={isAdmin ? "Wpisz kwotę i zakres prac..." : "Opisz swoje pytanie..."}
+                                    placeholder={isAdmin ? "Treść wiadomości ..." : "Opisz swoje pytanie..."}
                                     required 
                                     rows="4"
                                     style={{ resize: 'none' }}
@@ -158,7 +158,7 @@ export default function ContactModal({ reportId, title = "Ogólne zgłoszenie" }
                                     Anuluj
                                 </button>
                                 <button type="submit" className="report-btn-primary" disabled={loading}>
-                                    {loading ? 'Wysyłanie...' : (isAdmin ? 'Wyślij wycenę' : 'Wyślij')}
+                                    {loading ? 'Wysyłanie...' : (isAdmin ? 'Wyślij' : 'Wyślij')}
                                 </button>
                             </div>
                         </form>
