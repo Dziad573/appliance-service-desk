@@ -1296,3 +1296,15 @@
     .user-pricing__buttons { flex-direction:column; }
     .user-pricing__buttons button { width:100%; justify-content:center; }
 }
+
+
+.repair-part-row--returned { background: #f8fafc; opacity: .82; }
+.report-part-returned { display:inline-flex; align-items:center; align-self:center; padding:5px 9px; border-radius:999px; color:#167447; background:#dcfce7; font-size:12px; font-weight:700; white-space:nowrap; }
+.pricing-card .admin-pricing__parts-list { padding:18px; border-radius:12px; background:#f8fafc; }
+.pricing-card .pricing-detail-rows { display:grid; gap:10px; }
+.pricing-card .pricing-detail-row { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:13px 14px; border:1px solid #e1e8f0; border-radius:9px; background:#fff; }
+.pricing-card .pricing-detail-row__main { display:grid; gap:5px; }
+.pricing-card .pricing-detail-row__main span { color:#53677f; font-size:13px; line-height:1.5; }
+.pricing-card .admin-pricing__labor { display:flex; justify-content:space-between; align-items:center; padding:14px 4px; border-top:1px solid #dce4ee; margin-top:12px; }
+.pricing-card .admin-pricing__summary { display:flex; justify-content:space-between; align-items:center; gap:16px; padding:16px 4px 2px; border-top:1px solid #dce4ee; margin-top:8px; font-size:16px; }
+.pricing-card .admin-pricing__summary strong { font-size:21px; color:#173d70; }

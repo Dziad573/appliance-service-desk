@@ -1,11 +1,13 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { ClipboardList, Boxes, Package, Settings } from 'lucide-react';
+import { ClipboardList, Boxes, Package, Settings, PackagePlus, PackageMinus } from 'lucide-react';
 import './AdminSidebar.scss';
 
 const links = [
   { to: '/admin-panel', label: 'Panel główny', Icon: ClipboardList, end: true },
   { to: '/inventory', label: 'Stany magazynowe', Icon: Boxes, end: true },
+  { to: '/inventory/receipts', label: 'Zatowarowania magazynu', Icon: PackagePlus },
+  { to: '/inventory/issues', label: 'Wydania magazynowe', Icon: PackageMinus },
   { to: '/inventory/items', label: 'Katalog itemów', Icon: Package },
   { to: '/inventory/config', label: 'Konfiguracja serwisu', Icon: Settings },
 ];

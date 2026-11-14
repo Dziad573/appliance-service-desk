@@ -67,29 +67,179 @@
 .inventory-bulk-row { display: grid; grid-template-columns: minmax(0, 1fr) 130px auto; align-items: end; gap: 12px; padding: 12px; border: 1px solid var(--border-color, #d8dee9); border-radius: 10px; }
 .inventory-bulk-row label { display: grid; gap: 6px; }
 @media (max-width: 640px) { .inventory-bulk-row { grid-template-columns: 1fr; } }
-.inventory-heading-actions { display: flex; align-items: center; justify-content: flex-end; gap: 12px; flex-wrap: wrap; }
-.inventory-filters { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin: 0 0 16px; }
-.inventory-filters .inventory-search { flex: 1 1 260px; max-width: 390px; margin: 0; }
-.inventory-filters select { min-height: 40px; min-width: 145px; padding: 8px 30px 8px 10px; border: 1px solid #d1dbe7; border-radius: 7px; background: #fff; color: #16325c; font: inherit; font-size: .84rem; }
-.inventory-filters .inventory-secondary { min-height: 40px; }
-@media (max-width: 700px) { .inventory-heading-actions { width: 100%; justify-content: space-between; } .inventory-filters { align-items: stretch; } .inventory-filters .inventory-search, .inventory-filters select, .inventory-filters .inventory-secondary { max-width: none; width: 100%; flex-basis: 100%; } }
 
-/* Jednolity układ filtrów kolumnowych, zgodny z listą zgłoszeń */
-.inventory-table--filters thead th { vertical-align: top; white-space: normal; min-width: 105px; }
-.inventory-table--filters thead th > input,
-.inventory-table--filters thead th > select {
-  display: block; box-sizing: border-box; width: 100%; min-width: 0; height: 31px;
-  margin-top: 7px; padding: 5px 8px; border: 1px solid #dfe4eb; border-radius: 6px;
-  background: #fff; color: #16325c; font: inherit; font-size: .76rem; font-weight: 400;
-  outline: none;
+
+.inventory-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 18px;
+  padding: 5px;
+  border: 1px solid #dce4ef;
+  border-radius: 12px;
+  background: #fff;
 }
-.inventory-table--filters thead th > input::placeholder { color: #9aa8ba; }
-.inventory-table--filters thead th > input:focus,
-.inventory-table--filters thead th > select:focus { border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59,130,246,.12); }
-.inventory-table--filters thead th.numeric > input { text-align: right; }
-.inventory-table--filters { min-width: 850px; }
-.inventory-panel .inventory-heading-actions { gap: 10px; }
+.inventory-tabs button {
+  border: 0;
+  border-radius: 8px;
+  padding: 10px 15px;
+  color: #345071;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+.inventory-tabs button.active {
+  color: #fff;
+  background: #2861ed;
+  font-weight: 700;
+}
+.stock-document-list { display: grid; gap: 14px; margin-top: 18px; }
+.stock-document {
+  overflow: hidden;
+  border: 1px solid #dfe6ef;
+  border-radius: 12px;
+  background: #fff;
+}
+.stock-document__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 18px;
+  background: #f8fafc;
+  border-bottom: 1px solid #e5eaf1;
+}
+.stock-document__header > div { display: grid; gap: 4px; }
+.stock-document__header span, .stock-document__notes {
+  color: #64748b;
+  font-size: 13px;
+}
+.stock-document__reference { padding: 12px 18px 0; font-size: 13px; }
+.stock-document__reference a { color: #245bdc; font-weight: 600; }
+.stock-document__notes { margin: 8px 18px; }
+.stock-document .inventory-table-wrap { padding: 0 18px 12px; }
 @media (max-width: 700px) {
-  .inventory-table--filters thead th { min-width: 125px; }
-  .inventory-panel__heading { align-items: flex-start; flex-wrap: wrap; }
+  .stock-document__header { flex-direction: column; }
+  .inventory-tabs button { flex: 1 1 100%; text-align: left; }
 }
+
+
+/* Ujednolicone filtry tabel – układ taki sam jak na liście zgłoszeń. */
+.inventory-heading-actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 10px; }
+.inventory-heading-actions .inventory-secondary,
+.inventory-heading-actions .inventory-primary { flex: 0 0 auto; }
+.inventory-table--filters { min-width: 940px; }
+.inventory-table--filters thead th { vertical-align: bottom; white-space: normal; padding: 12px 10px 10px; }
+.inventory-table--filters thead th input,
+.inventory-table--filters thead th select {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  height: 36px;
+  margin-top: 7px;
+  padding: 7px 10px;
+  border: 1px solid #d6deea;
+  border-radius: 7px;
+  outline: none;
+  background: #fff;
+  color: #16325c;
+  font: inherit;
+  font-size: .82rem;
+  font-weight: 400;
+}
+.inventory-table--filters thead th input::placeholder { color: #94a3b8; }
+.inventory-table--filters thead th input:focus,
+.inventory-table--filters thead th select:focus { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,.12); }
+.inventory-table--filters thead th.numeric input { text-align: right; }
+.inventory-table--filters thead th.numeric { text-align: right; }
+.inventory-table--filters thead th.numeric input { margin-left: auto; }
+
+/* Duże okno zatowarowania/wydania z edytorem po lewej i listą dokumentu po prawej. */
+.inventory-movement-modal { width: min(1120px, 100%); max-height: min(90vh, 900px); }
+.inventory-movement-modal .inventory-modal__header { padding: 20px 26px; }
+.inventory-movement-modal .inventory-modal__header p { margin: 5px 0 0; color: #64748b; font-size: .88rem; }
+.inventory-movement-form { min-height: 0; overflow-y: auto; display: flex; flex-direction: column; }
+.inventory-movement-warehouse { padding: 20px 26px 0; }
+.inventory-movement-warehouse label,
+.inventory-movement-editor label { display: flex; flex-direction: column; gap: 7px; color: #526b89; font-size: .84rem; font-weight: 600; }
+.inventory-movement-warehouse select,
+.inventory-movement-editor input,
+.inventory-movement-editor select,
+.inventory-movement-editor textarea {
+  box-sizing: border-box; width: 100%; min-height: 41px; padding: 9px 11px;
+  border: 1px solid #d1dbe7; border-radius: 7px; outline: none; background: #fff;
+  color: #16325c; font: inherit; font-size: .88rem;
+}
+.inventory-movement-warehouse select:focus,
+.inventory-movement-editor input:focus,
+.inventory-movement-editor select:focus,
+.inventory-movement-editor textarea:focus { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,.12); }
+.inventory-movement-columns { display: grid; grid-template-columns: minmax(310px, .82fr) minmax(0, 1.18fr); gap: 20px; padding: 20px 26px 24px; min-height: 330px; }
+.inventory-movement-editor,
+.inventory-movement-summary { min-width: 0; padding: 20px; border: 1px solid #dfe6ef; border-radius: 11px; background: #fff; }
+.inventory-movement-editor { display: flex; flex-direction: column; gap: 16px; background: #f9fbfe; }
+.inventory-movement-editor h3,
+.inventory-movement-summary h3 { margin: 0; color: #16325c; font-size: 1rem; }
+.inventory-movement-editor > p,
+.inventory-movement-summary__heading p { margin: -10px 0 2px; color: #64748b; font-size: .83rem; }
+.inventory-movement-editor__row { display: grid; grid-template-columns: minmax(90px, .55fr) minmax(0, 1fr); gap: 12px; }
+.inventory-movement-editor textarea { resize: vertical; min-height: 78px; }
+.inventory-add-line { align-self: flex-start; min-height: 40px; }
+.inventory-movement-summary { display: flex; flex-direction: column; gap: 14px; }
+.inventory-movement-summary__heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.inventory-movement-summary__heading p { margin: 5px 0 0; }
+.inventory-movement-empty { flex: 1; min-height: 220px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 9px; padding: 20px; border: 1px dashed #cbd5e1; border-radius: 9px; color: #94a3b8; text-align: center; }
+.inventory-movement-empty strong { color: #526b89; font-size: .9rem; }
+.inventory-movement-empty span { font-size: .82rem; }
+.inventory-movement-lines { display: grid; gap: 10px; align-content: start; max-height: 390px; overflow-y: auto; }
+.inventory-movement-line { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 13px 14px; border: 1px solid #e1e8f0; border-radius: 9px; background: #fbfdff; }
+.inventory-movement-line__main { min-width: 0; display: grid; gap: 4px; }
+.inventory-movement-line__main strong { color: #16325c; font-size: .9rem; }
+.inventory-movement-line__main span,
+.inventory-movement-line__main small { color: #64748b; font-size: .79rem; }
+.inventory-movement-modal .inventory-modal-actions { margin: 0; padding: 16px 26px; }
+@media (max-width: 760px) {
+  .inventory-movement-modal { max-height: 94vh; }
+  .inventory-movement-columns { grid-template-columns: 1fr; padding: 16px; gap: 12px; }
+  .inventory-movement-warehouse { padding: 16px 16px 0; }
+  .inventory-movement-modal .inventory-modal__header { padding: 16px; }
+  .inventory-movement-editor__row { grid-template-columns: 1fr; }
+  .inventory-movement-modal .inventory-modal-actions { padding: 13px 16px; }
+}
+
+
+/* Dokumenty magazynowe – widok listy i szczegółów */
+.stock-documents-table tbody tr.stock-document-clickable { cursor: pointer; }
+.stock-documents-table tbody tr.stock-document-clickable:hover { background: #f5f8ff; }
+.stock-documents-table thead th { min-width: 125px; vertical-align: bottom; }
+.stock-documents-table thead th input { display: block; box-sizing: border-box; width: 100%; min-width: 105px; margin-top: 7px; }
+.stock-document-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 18px 0;
+}
+.stock-document-detail-grid > div {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px;
+  border: 1px solid #e1e8f0;
+  border-radius: 9px;
+  background: #fbfcfe;
+  min-width: 0;
+}
+.stock-document-detail-grid span { color: #64748b; font-size: 12px; }
+.stock-document-detail-grid strong { overflow-wrap: anywhere; color: #15345e; }
+.stock-document-detail-grid a { color: #245bdc; }
+@media (max-width: 760px) {
+  .stock-document-detail-grid { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 480px) {
+  .stock-document-detail-grid { grid-template-columns: 1fr; }
+}
+
+/* Status zwrotu części w historii wydań */
+.stock-document-return-status { white-space: nowrap; }
+.stock-documents-table tbody tr.stock-document-clickable { cursor: pointer; }
+.stock-documents-table tbody tr.stock-document-clickable:hover { background: #f5f8ff; }

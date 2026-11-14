@@ -82,6 +82,9 @@ export const App = () => {
                 <Route path="/inventory" element={user?.role === 'admin' ? <InventoryPage /> : <Navigate to={getRedirectPath(user)} replace />} />
                 <Route path="/inventory/items" element={user?.role === 'admin' ? <InventoryPage /> : <Navigate to={getRedirectPath(user)} replace />} />
                 <Route path="/inventory/config" element={user?.role === 'admin' ? <InventoryPage /> : <Navigate to={getRedirectPath(user)} replace />} />
+                <Route path="/inventory/receipts" element={user?.role === 'admin' ? <InventoryPage /> : <Navigate to={getRedirectPath(user)} replace />} />
+                <Route path="/inventory/issues" element={user?.role === 'admin' ? <InventoryPage /> : <Navigate to={getRedirectPath(user)} replace />} />
+                <Route path="/inventory/documents/:documentId/:direction" element={user?.role === 'admin' ? <InventoryPage /> : <Navigate to={getRedirectPath(user)} replace />} />
 
                 {/* Strona główna administratora */}
                 <Route path="/admin-panel" element={user?.role === 'admin' ? <AdminHomePage /> : <Navigate to={getRedirectPath(user)} replace />} />

@@ -79,7 +79,7 @@ const RepairCostSection = ({ report, isAdmin, user, onSaved, onDecision, stockIt
         <div className="details-card__header"><div className="details-card__icon"><DollarSign size={19}/></div><div><h2>Wycena naprawy</h2><p>Rozliczenie części i robocizny</p></div></div>
         {isAdmin ? <>
             {hasPricing ? <div className="admin-pricing__parts-list">
-                <div className="pricing-detail-rows">{parts.map((p,i)=><div className="repair-part-row pricing-detail-row" key={p.id || i}><div className="repair-part-row__main"><strong>{p.item_name}</strong><span>PN: {p.part_number || '—'} · {p.quantity} szt. · {p.charge_customer === false ? 'Gwarancyjna / bezpłatna' : 'Pozagwarancyjna / płatna'} · {p.charge_customer === false ? '0,00 zł' : `${Number(p.unit_price).toFixed(2)} zł/szt.`}</span></div>{editable && <button type="button" className="report-action-button report-action-button--subtle" onClick={()=>setParts(v=>v.filter((_,idx)=>idx!==i))} title="Usuń"><X size={14}/></button>}</div>)}</div>
+                <div className="pricing-detail-rows">{parts.map((p,i)=><div className="repair-part-row pricing-detail-row" key={p.id || i}><div className="repair-part-row__main"><strong>{p.item_name}</strong><span>PN: {p.part_number || '—'} · {p.quantity} szt. ·  {p.charge_customer === false ? 'Gwarancyjna / bezpłatna' : 'Pozagwarancyjna / płatna'} · {p.charge_customer === false ? '0,00 zł' : `${Number(p.unit_price).toFixed(2)} zł/szt. · Razem: ${(Number(p.unit_price)*Number(p.quantity)).toFixed(2)} zł`}</span></div>{editable && <button type="button" className="report-action-button report-action-button--subtle" onClick={()=>setParts(v=>v.filter((_,idx)=>idx!==i))} title="Usuń"><X size={14}/></button>}</div>)}</div>
                 {Number(labor || 0) > 0 && <div className="admin-pricing__labor"><label>Robocizna</label><strong>{Number(labor || 0).toFixed(2)} zł</strong></div>}
                 <div className="admin-pricing__summary">Kwota wyceny: <strong>{total.toFixed(2)} zł</strong></div>
             </div> : <p className="repair-parts-empty">Nie dodano jeszcze wyceny.</p>}
@@ -87,7 +87,7 @@ const RepairCostSection = ({ report, isAdmin, user, onSaved, onDecision, stockIt
             {editable && <div className="repair-modal__actions"><button className="report-action-button report-action-button--primary" type="button" onClick={()=>setModal(true)}>{hasPricing ? 'Edytuj wycenę' : 'Dodaj wycenę'}</button>{hasPricing && <button className="report-action-button" type="button" disabled={busy || pricingDirty || (!report.pricing_sent_at && !hasPricing)} onClick={send}>Wyślij wycenę klientowi</button>}</div>}
         </> : <>
             {report.pricing_required && hasPricing ? <>
-                <div className="admin-pricing__parts-list"><h4>Wycena serwisu</h4><div className="pricing-detail-rows">{parts.map((p,i)=><div className="repair-part-row pricing-detail-row" key={p.id || i}><div className="repair-part-row__main"><strong>{p.item_name}</strong><span>PN: {p.part_number || '—'} · {p.quantity} szt. · {p.charge_customer === false ? 'Bezpłatna' : `${Number(p.unit_price).toFixed(2)} zł/szt.`}</span></div></div>)}</div></div>
+                <div className="admin-pricing__parts-list"><h4>Wycena serwisu</h4><div className="pricing-detail-rows">{parts.map((p,i)=><div className="repair-part-row pricing-detail-row" key={p.id || i}><div className="repair-part-row__main"><strong>{p.item_name}</strong><span>PN: {p.part_number || '—'} · Ilość: {p.quantity} szt. · {p.charge_customer === false ? 'Bezpłatna' : `${Number(p.unit_price).toFixed(2)} zł/szt. · Razem: ${(Number(p.unit_price)*Number(p.quantity)).toFixed(2)} zł`}</span></div></div>)}</div></div>
                 <div className="admin-pricing__summary">Kwota wyceny: <strong>{Number(report.total_cost || total).toFixed(2)} zł</strong></div>
                 {report.pricing_sent_at && report.price_accepted === null && <div className="user-pricing__actions"><p><strong>Wymagana decyzja</strong><span>Zaakceptuj lub odrzuć wycenę, aby serwis mógł kontynuować.</span></p><div className="user-pricing__buttons"><button type="button" className="report-action-button report-action-button--primary" disabled={busy} onClick={()=>decision(true)}><Check size={16}/> Akceptuję wycenę</button><button type="button" className="report-action-button report-action-button--danger" disabled={busy} onClick={()=>decision(false)}><X size={16}/> Odrzucam wycenę</button></div></div>}
                 {report.price_accepted === true && <p className="pricing-status-notice success">Wycena została zaakceptowana.</p>}
@@ -266,14 +266,24 @@ export const ReportDetailsPage = () => {
     useEffect(() => { loadStatusHistory(); }, [report?.id]);
 
     const loadReportParts = async () => {
-        if (!report?.id || !isAdmin) return;
+        if (!report?.id) return;
         try {
-            const [parts, items, resources, warehouses] = await Promise.all([getReportParts(report.id), getItems(true), getResources(), getWarehouses()]);
+            // Lista wykorzystanych części jest widoczna również dla klienta.
+            // Dane katalogu i magazynu są potrzebne wyłącznie administratorowi do pobierania kolejnych części.
+            const parts = await getReportParts(report.id);
             setReportParts(Array.isArray(parts) ? parts : []);
-            setStockItems((items || []).filter(item => item.item_type === 'component' && item.is_active));
-            setStockResources((resources || []).filter(resource => resource.quantity > 0 && resource.warehouse?.warehouse_type !== 'broken'));
-            setStockWarehouses(warehouses || []);
-        } catch (err) { setPartsError(err.response?.data?.message || 'Nie udało się pobrać danych magazynowych.'); }
+
+            if (isAdmin) {
+                const [items, resources, warehouses] = await Promise.all([
+                    getItems(true), getResources(), getWarehouses()
+                ]);
+                setStockItems((items || []).filter(item => item.item_type === 'component' && item.is_active));
+                setStockResources((resources || []).filter(resource => resource.quantity > 0 && resource.warehouse?.warehouse_type !== 'broken'));
+                setStockWarehouses(warehouses || []);
+            }
+        } catch (err) {
+            setPartsError(err.response?.data?.message || 'Nie udało się pobrać listy wykorzystanych części.');
+        }
     };
     useEffect(() => { loadReportParts(); }, [report?.id, isAdmin]);
 
@@ -527,13 +537,14 @@ export const ReportDetailsPage = () => {
                                     </div>
                                     <div className="repair-workspace__parts">
                                         <div className="repair-workspace__panel-heading"><h3><Package size={17} /> Pobrane części</h3><button type="button" className="report-action-button report-action-button--primary" onClick={() => { setPartsError(''); setShowPartModal(true); }}><Plus size={15} /> Pobierz części</button></div>
-                                        {reportParts.filter(part => !part.returned_at).length === 0 ? <p className="repair-parts-empty">Nie pobrano jeszcze żadnych części do tej reklamacji.</p> : <div className="repair-parts-list">{reportParts.filter(part => !part.returned_at).map(part => <div className="repair-part-row" key={part.id}><div className="repair-part-row__main"><strong>{part.item?.brand?.brand_name} — {part.item?.item_name}</strong><span>{part.item?.part_number || part.item?.model_number || '—'} · {part.warehouse?.warehouse_name}</span></div><strong className="repair-part-row__quantity">{part.quantity} szt.</strong><span className={`repair-part-type repair-part-type--${part.issue_type}`}>{part.issue_type === 'warranty' ? 'Gwarancyjna' : 'Pozagwarancyjna'}</span><button type="button" className="report-action-button report-action-button--subtle" disabled={partsBusy} onClick={() => handlePartReturn(part.id)} title="Zwróć do magazynu"><RotateCcw size={14} /> Zwróć</button></div>)}</div>}
+                                        {reportParts.length === 0 ? <p className="repair-parts-empty">Nie pobrano jeszcze żadnych części do tej reklamacji.</p> : <div className="repair-parts-list">{reportParts.map(part => <div className={`repair-part-row ${part.returned_at ? 'repair-part-row--returned' : ''}`} key={part.id}><div className="repair-part-row__main"><strong>{part.item?.brand?.brand_name} — {part.item?.item_name}</strong><span>{part.item?.part_number || part.item?.model_number || '—'} · {part.warehouse?.warehouse_name} · pobrano {new Date(part.created_at).toLocaleDateString('pl-PL')}</span></div><strong className="repair-part-row__quantity">{part.quantity} szt.</strong><span className={`repair-part-type repair-part-type--${part.issue_type}`}>{part.issue_type === 'warranty' ? 'Gwarancyjna' : 'Pozagwarancyjna'}</span>{part.returned_at ? <span className="report-part-returned">Zwrócona · {new Date(part.returned_at).toLocaleDateString('pl-PL')}</span> : <button type="button" className="report-action-button report-action-button--subtle" disabled={partsBusy} onClick={() => handlePartReturn(part.id)} title="Zwróć do magazynu"><RotateCcw size={14} /> Zwróć</button>}</div>)}</div>}
                                         {partsError && <p className="service-note-message service-note-message--error">{partsError}</p>}
                                     </div>
                                     <RepairCostSection report={report} isAdmin={true} user={user} onSaved={handlePricingSaved} onDecision={handleAcceptPrice} stockItems={stockItems} stockResources={stockResources} />
                                 </div>
                             </section>
                         )}
+
 
                         {isAdmin && canEditRepairResult && (
                             <section className="details-card repair-result-editor">
@@ -683,7 +694,7 @@ export const ReportDetailsPage = () => {
 
                                 </details>
 
-                                {isAdmin && isTerminal && report.pricing_required && report.pricing_sent_at && <details className="details-card details-card--collapsible pricing-history-card"><summary className="details-card__header"><div className="details-card__icon"><DollarSign size={19}/></div><div><h2>Wycena naprawy</h2><p>Podsumowanie wyceny zapisanej w trakcie reklamacji</p></div></summary><div className="admin-pricing__parts-list"><div className="pricing-detail-rows">{(report.pricingParts || []).map((p,i)=><div className="repair-part-row pricing-detail-row" key={p.id || i}><div className="repair-part-row__main"><strong>{p.item_name}</strong><span>PN: {p.part_number || '—'} · {p.quantity} szt. · {p.charge_customer === false ? 'Bezpłatna' : `${Number(p.unit_price).toFixed(2)} zł/szt.`}</span></div></div>)}</div><div className="admin-pricing__summary">Kwota wyceny: <strong>{Number(report.total_cost || 0).toFixed(2)} zł</strong></div></div></details>}
+                                {isAdmin && isTerminal && report.pricing_required && report.pricing_sent_at && <details className="details-card details-card--collapsible pricing-history-card"><summary className="details-card__header"><div className="details-card__icon"><DollarSign size={19}/></div><div><h2>Wycena naprawy</h2><p>Podsumowanie wyceny zapisanej w trakcie reklamacji</p></div></summary><div className="admin-pricing__parts-list"><div className="pricing-detail-rows">{(report.pricingParts || []).map((p,i)=><div className="repair-part-row pricing-detail-row" key={p.id || i}><div className="repair-part-row__main"><strong>{p.item_name}</strong><span>PN: {p.part_number || '—'} · Ilość: {p.quantity} szt. · {p.charge_customer === false ? 'Bezpłatna' : `${Number(p.unit_price).toFixed(2)} zł/szt. · Razem: ${(Number(p.unit_price)*Number(p.quantity)).toFixed(2)} zł`}</span></div></div>)}</div><div className="admin-pricing__summary">Kwota wyceny: <strong>{Number(report.total_cost || 0).toFixed(2)} zł</strong></div></div></details>}
 
                                 {!isAdmin && <RepairCostSection report={report} isAdmin={false} user={user} onSaved={handlePricingSaved} onDecision={handleAcceptPrice} stockItems={stockItems} stockResources={stockResources} />}
 
@@ -695,6 +706,44 @@ export const ReportDetailsPage = () => {
                                         {showRepairResult && <div className="service-note-readonly__item"><span>Rezultat naprawy</span><p>{report.repair_result || 'Rezultat naprawy nie został jeszcze uzupełniona.'}</p></div>}
                                     </div>
                                 </details>}
+
+                                {/* Podsumowanie wykorzystanych części w głównej kolumnie szczegółów. */}
+                        {(!isAdmin || !['Diagnoza', 'W naprawie'].includes(report.status)) && (
+                            <section className="details-card report-used-parts">
+                                <div className="details-card__header">
+                                    <div className="details-card__icon"><Package size={19} /></div>
+                                    <div>
+                                        <h2>Wykorzystane części</h2>
+                                        <p>Podsumowanie części pobranych do realizacji tej reklamacji</p>
+                                    </div>
+                                </div>
+                                {reportParts.length === 0 ? (
+                                    <p className="repair-parts-empty">Nie pobrano jeszcze żadnych części do tej reklamacji.</p>
+                                ) : <div className="repair-parts-list report-used-parts__list">
+                                    {reportParts.map(part => (
+                                        <div className={`repair-part-row ${part.returned_at || part.status === 'returned' ? 'repair-part-row--returned' : ''}`} key={part.id}>
+                                            <div className="repair-part-row__main">
+                                                <strong>{[part.item?.brand?.brand_name, part.item?.item_name].filter(Boolean).join(' — ') || 'Pozycja katalogowa'}</strong>
+                                                <span>
+                                                    {part.item?.part_number || part.item?.model_number || 'Brak numeru'} ·
+                                                    {' '}{part.warehouse?.warehouse_name || 'Magazyn nieznany'} ·
+                                                    {' '}pobrano {part.created_at ? new Date(part.created_at).toLocaleDateString('pl-PL') : '—'}
+                                                </span>
+                                            </div>
+                                            <strong className="repair-part-row__quantity">{part.quantity} szt.</strong>
+                                            <span className={`repair-part-type repair-part-type--${part.issue_type}`}>
+                                                {part.issue_type === 'warranty' ? 'Gwarancyjna' : 'Pozagwarancyjna'}
+                                            </span>
+                                            {(part.returned_at || part.status === 'returned') && (
+                                                <span className="report-part-returned">
+                                                    Zwrócona{part.returned_at ? ` · ${new Date(part.returned_at).toLocaleDateString('pl-PL')}` : ''}
+                                                </span>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>}
+                            </section>
+                        )}
 
                             </main>
 
